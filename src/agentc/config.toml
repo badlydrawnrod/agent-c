@@ -11,7 +11,7 @@ model_name = "openai/gpt-oss-120b:cerebras"
 model_name = "mistral-small-latest"
 
 [ollama]
-model_name = "gpt-oss:20b"
+model_name = "gpt-oss:120b-cloud"
 
 [openai]
 model_name = "gpt-4o"

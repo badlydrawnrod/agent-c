@@ -4,95 +4,91 @@ A simple code editing assistant powered by [Pydantic AI](https://ai.pydantic.dev
 
 Hugely inspired by [How to Build an Agent](https://ampcode.com/how-to-build-an-agent) by Thorsten Ball of [AmpCode](https://ampcode.com/).
 
-## Quick Start
-
-Agent C defaults to running locally using Ollama and `gpt-oss:20b`.
-
-- Install [Ollama](https://ollama.com/) then download and serve `gpt-oss:20b`
-- Install [`uv`](https://docs.astral.sh/uv/)
-- Run `uvx git+https://github.com/badlydrawnrod/agent-c`
-
 ## Prerequisites
 
 - [Python](https://www.python.org/) 3.13 or higher
 - [`uv`](https://docs.astral.sh/uv/) package manager
 
+## Quick Start
+
+Agent C defaults to running with [Ollama](https://ollama.com/) and the `gpt-oss:120b-cloud` model.
+
+1. **Install Ollama**:
+   - Download and install [Ollama](https://ollama.com/)
+   - Sign in: `ollama signin` (this will prompt you to create an account if you don't have one)
+   - Pull the model: `ollama pull gpt-oss:120b-cloud`
+   - Start Ollama: `ollama serve`
+
+2. **Install uv**:
+   - Install [`uv`](https://docs.astral.sh/uv/) using the standalone installer for your OS.
+
+3. **Run Agent C**:
+   - Run: `uvx git+https://github.com/badlydrawnrod/agent-c`
+   - Interact with the agent by typing commands or questions. Type "quit" or "exit" to end.
+
+For other providers (e.g., OpenAI, Anthropic), see Configuration below.
+
 ## Installation
 
-### Windows
+### For Development or Custom Setup
 
-1. Install `uv` using the standalone installer:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/badlydrawnrod/agent-c.git
+   cd agent-c
    ```
-   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-   ```
+2. Install [`uv`](https://docs.astral.sh/uv/):
 
-2. Clone or download the project and navigate to the directory.
-
-3. Install dependencies:
-   ```
-   uv sync
-   ```
-
-### Linux
-
-1. Install `uv` using the standalone installer:
-   ```
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
-
-2. Clone or download the project and navigate to the directory.
+   - Windows: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+   - Linux/macOS: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
 3. Install dependencies:
-   ```
-   uv sync
-   ```
+
+   - Run: `uv sync`
 
 ## Configuration
 
-The agent is configured using three [TOML](https://toml.io/) files:
+The agent uses three TOML files for configuration:
 
-- `providers.toml`: This file contains the master list of all supported LLM providers and their default settings. You generally won't need to edit this file.
-- `config.toml`: This file is where you can override the default settings for each provider. For example, you can specify a different model to use for a particular provider.
-- `personalities.toml`: This file defines different personalities for the agent, each with its own system prompt and potentially different provider/model settings. Personalities allow the agent to adopt different roles, such as a code reviewer or debugger.
+- `providers.toml`: Master list of supported LLM providers (usually no need to edit).
+- `config.toml`: Override default settings for providers (e.g., change models).
+- `personalities.toml`: Define agent personalities with custom prompts and settings (e.g., coder, reviewer, debugger).
 
-To use a specific provider, you'll need to set the appropriate API key as an environment variable. The required environment variable for each provider is listed in `providers.toml`.
+To use providers requiring API keys (like Anthropic or OpenAI), set environment variables:
+- Windows (Command Prompt): `set ANTHROPIC_API_KEY=your_key`
+- Windows (PowerShell): `$env:ANTHROPIC_API_KEY = 'your_key'`
+- Linux/macOS: `export ANTHROPIC_API_KEY=your_key`
+
+Ollama requires no API key but must be running locally.
 
 ## Running the Agent
 
-1. Set the appropriate API key environment variable based on the provider you want to use (see Configuration section). For example:
-- Windows (command prompt): `set ANTHROPIC_API_KEY=your_api_key_here`
-- Windows (PowerShell): `$env:ANTHROPIC_API_KEY = 'your_api_key_here'`
-- Linux / Mac: `export ANTHROPIC_API_KEY=your_api_key_here`
-
-For [Ollama](https://ollama.com/), no API key is needed, but ensure Ollama is running locally.
-
-2. Run the agent with the desired personality:
-```
-uv run agentc --personality coder
+Run the agent with:
+```bash
+uv run agent-c --personality coder
 ```
 
-Available personalities: coder, reviewer, debugger (default: coder).
+Available personalities: `coder` (default), `reviewer`, `debugger`.
 
-Optionally override the model:
-```
-uv run agentc --personality reviewer --model gpt-4
-```
-
-Alternatively, run directly with [uvx](https://docs.astral.sh/uv/concepts/tools/) without installing dependencies:
-```
-uvx --from . agentc --personality coder
+Override the model:
+```bash
+uv run agent-c --personality reviewer --model gpt-4
 ```
 
-3. Interact with the agent by typing commands or questions. Type "quit" or "exit" to end the session.
+Run without installing (using uvx):
+```bash
+uvx --from . agent-c --personality coder
+```
+
+Interact by typing commands or questions. Exit with "quit" or "exit".
 
 ## Development
 
-To run tests or use development tools:
-
-```
-uv run [pytest](https://pytest.org/)
-uv run [mypy](https://mypy-lang.org/)
-uv run [ruff](https://ruff.rs/)
+Run tests and linting:
+```bash
+uv run pytest
+uv run mypy
+uv run ruff
 ```
 
 ## License

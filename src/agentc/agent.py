@@ -158,23 +158,27 @@ tools = [
 
 def load_providers() -> dict:
     """Load providers configuration from providers.toml."""
-    with open("providers.toml", "rb") as f:
+    with open(Path(__file__).parent / "providers.toml", "rb") as f:
         return tomllib.load(f)
 
 
 def load_config_overrides() -> dict:
     """Load configuration overrides from config.toml."""
     try:
-        with open("config.toml", "rb") as f:
+        with open(Path(__file__).parent / "config.toml", "rb") as f:
             return tomllib.load(f)
     except FileNotFoundError:
-        return {}
+        try:
+            with open("config.toml", "rb") as f:
+                return tomllib.load(f)
+        except FileNotFoundError:
+            return {}
 
 
 def load_personalities_data() -> dict:
     """Load personalities configuration from personalities.toml."""
     try:
-        with open("personalities.toml", "rb") as f:
+        with open(Path(__file__).parent / "personalities.toml", "rb") as f:
             return tomllib.load(f)
     except FileNotFoundError:
         return {}
@@ -275,7 +279,7 @@ def build_model(
 
 def load_system_prompt(personality: PersonalityConfig) -> str:
     """Load the system prompt from file."""
-    with open(personality.prompt_file, "r") as f:
+    with open(Path(__file__).parent / "prompts" / personality.prompt_file, "r") as f:
         return f.read()
 
 
