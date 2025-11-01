@@ -16,6 +16,7 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "agentc"
+source-include = ["agentc/*.py", "agentc/*.toml", "agentc/prompts/*.md"]
 
 [project.scripts]
-agentc = "agentc.agent:main"
+agent-c = "agentc.agent:main"
