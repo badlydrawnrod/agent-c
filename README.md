@@ -68,19 +68,19 @@ For [Ollama](https://ollama.com/), no API key is needed, but ensure Ollama is ru
 
 2. Run the agent with the desired personality:
 ```
-uv run agentc --personality coder
+uv run agent-c --personality coder
 ```
 
 Available personalities: coder, reviewer, debugger (default: coder).
 
 Optionally override the model:
 ```
-uv run agentc --personality reviewer --model gpt-4
+uv run agent-c --personality reviewer --model gpt-4
 ```
 
 Alternatively, run directly with [uvx](https://docs.astral.sh/uv/concepts/tools/) without installing dependencies:
 ```
-uvx --from . agentc --personality coder
+uvx --from . agent-c --personality coder
 ```
 
 3. Interact with the agent by typing commands or questions. Type "quit" or "exit" to end the session.
@@ -90,9 +90,9 @@ uvx --from . agentc --personality coder
 To run tests or use development tools:
 
 ```
-uv run [pytest](https://pytest.org/)
-uv run [mypy](https://mypy-lang.org/)
-uv run [ruff](https://ruff.rs/)
+uv run pytest
+uv run mypy
+uv run ruff
 ```
 
 ## License
