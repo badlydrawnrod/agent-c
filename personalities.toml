@@ -1,0 +1,15 @@
+[coder]
+provider = "ollama"
+prompt_file = "prompts/coder.md"
+description = "Expert software developer for writing clean, efficient code, refactoring, and implementing features."
+
+[reviewer]
+provider = "ollama"
+prompt_file = "prompts/reviewer.md"
+description = "Senior code reviewer for analyzing bugs, security, performance, and best practices."
+
+[debugger]
+provider = "ollama"
+model = "gpt-oss:20b"
+prompt_file = "prompts/debugger.md"
+description = "Debugging expert for identifying issues, tracing execution, and proposing fixes."

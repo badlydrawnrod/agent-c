@@ -1,0 +1,17 @@
+[anthropic]
+model_name = "claude-sonnet-4-5"
+
+[google]
+model_name = "gemini-2.5-flash"
+
+[huggingface]
+model_name = "openai/gpt-oss-120b:cerebras"
+
+[mistral]
+model_name = "mistral-small-latest"
+
+[ollama]
+model_name = "gpt-oss:20b"
+
+[openai]
+model_name = "gpt-4o"
