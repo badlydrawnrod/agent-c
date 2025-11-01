@@ -27,7 +27,7 @@ model_name = "mistral-large-latest"
 provider_cls = "pydantic_ai.providers.ollama.OllamaProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
 base_url = "http://localhost:11434/v1"
-model_name = "gpt-oss:20b"
+model_name = "gpt-oss:120b-cloud"
 
 [openai]
 provider_cls = "pydantic_ai.providers.openai.OpenAIProvider"
