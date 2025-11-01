@@ -14,7 +14,7 @@ Hugely inspired by [How to Build an Agent](https://ampcode.com/how-to-build-an-a
 Agent C defaults to running with [Ollama](https://ollama.com/) and the `gpt-oss:120b-cloud` model.
 
 1. **Install Ollama**:
-   - Download and install [Ollama](https://ollama.com/).
+   - Download and install [Ollama](https://ollama.com/)
    - Sign in: `ollama signin` (this will prompt you to create an account if you don't have one)
    - Pull the model: `ollama pull gpt-oss:120b-cloud`
    - Start Ollama: `ollama serve`
