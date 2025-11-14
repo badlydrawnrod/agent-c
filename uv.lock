@@ -19,6 +19,7 @@ name = "agent-c"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "prompt-toolkit" },
     { name = "pydantic-ai" },
 ]
 
@@ -30,7 +31,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pydantic-ai", specifier = ">=1.6.0" }]
+requires-dist = [
+    { name = "prompt-toolkit", specifier = ">=3.0.52" },
+    { name = "pydantic-ai", specifier = ">=1.6.0" },
+]
 
 [package.metadata.requires-dev]
 dev = [

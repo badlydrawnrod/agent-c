@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Agent C is a simple code editing assistant powered by Pydantic AI, supporting multiple LLM providers and delegation to sub-agents."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = ["pydantic-ai>=1.6.0"]
+dependencies = [
+    "prompt-toolkit>=3.0.52",
+    "pydantic-ai>=1.6.0",
+]
 license = "MIT"
 
 [dependency-groups]
@@ -16,7 +19,7 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "agentc"
-source-include = ["agentc/*.py", "agentc/*.toml", "agentc/prompts/*.md"]
+source-include = ["agentc/*.py", "agentc/*.toml", "agentc/prompts/*.md", "agentc/ui/*.py"]
 
 [project.scripts]
 agent-c = "agentc.agent:main"
