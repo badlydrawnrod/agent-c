@@ -24,10 +24,20 @@
 
 - **`agent.py`**: Entry point and event loop orchestration
 - **`core/agent_factory.py`**: Agent creation and configuration management
+- **`core/cli.py`**: Command-line argument parsing
+- **`core/commands.py`**: User command handling and execution
 - **`core/config.py`**: TOML configuration file loading
 - **`core/file_ops.py`**: File operations with backup/restore capability
-- **`core/tools.py`**: Tool definitions used by agents
 - **`core/types.py`**: Type definitions and Pydantic models
+- **`core/_config.py`**: Configuration utilities
+- **`core/_model.py`**: Model selection and validation
+- **`core/_prompt.py`**: Prompt loading and management
+- **`core/_provider.py`**: Provider selection and initialization
+- **`core/tools/`**: Tool definitions and registry
+  - **`file_tools.py`**: File read/write/search operations
+  - **`agent_tools.py`**: Agent delegation functionality
+  - **`backup_tools.py`**: Backup and restore operations
+  - **`registry.py`**: Tool registry and discovery
 - **`ui/console.py`**: Terminal UI using Rich library
 - **`ui/protocol.py`**: UI protocol definitions
 

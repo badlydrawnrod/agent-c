@@ -1,4 +1,4 @@
-from agentc.ui.console import ConsoleUI
+from agentc.ui.console import ConsoleUI, InteractionController
 from agentc.ui.protocol import UIProtocol
 
-__all__ = ["ConsoleUI", "UIProtocol"]
+__all__ = ["ConsoleUI", "InteractionController", "UIProtocol"]

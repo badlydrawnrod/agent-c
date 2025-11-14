@@ -1,10 +1,22 @@
+"""UI protocol definitions for Agent C.
+
+This module defines the interface that UI implementations must satisfy.
+Alternative UIs (web, API, etc.) should implement all methods in UIProtocol.
+"""
+
 from typing import Any, Protocol
+
 from pydantic_ai import Agent, DeferredToolRequests
 from pydantic_ai.messages import ModelMessage
 
 
 class UIProtocol(Protocol):
-    """Abstract interface for user interaction."""
+    """Protocol that UI implementations must satisfy.
+
+    This defines the contract for user interaction. Any alternative UI
+    implementation (web, API, etc.) should implement all methods in this
+    protocol.
+    """
 
     async def show_intro(self, tools_info: str) -> None:
         """Display the introduction message."""
@@ -32,8 +44,4 @@ class UIProtocol(Protocol):
         run_deps: Any,
     ) -> list[ModelMessage]:
         """Run the agent interaction loop and return updated conversation."""
-        ...
-
-    async def handle_command(self, command: str) -> tuple[str | None, bool]:
-        """Handle special commands. Returns (new_personality, should_exit)."""
         ...

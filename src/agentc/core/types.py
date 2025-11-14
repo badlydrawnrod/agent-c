@@ -6,9 +6,12 @@ the dependencies injected into the agent's run context.
 """
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from pydantic_ai import Agent, DeferredToolRequests
 
 
 class AgentConfig(BaseModel):
@@ -51,6 +54,10 @@ class RunDeps:
 
     Attributes:
         info: Callable to display informational messages to the user.
+        agent_factory: Callable to create agents for delegation. None if delegation disabled.
     """
 
     info: Callable[[str], None]
+    agent_factory: (
+        Callable[[str], "Agent[RunDeps, str | DeferredToolRequests]"] | None
+    ) = None

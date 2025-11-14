@@ -40,7 +40,7 @@ Install [`uv`](https://docs.astral.sh/uv/) using the standalone installer for yo
 uvx git+https://github.com/badlydrawnrod/agent-c
 ```
 
-Type commands or questions. Exit with "quit" or "exit".
+Type commands or questions. Exit with "/quit" or "/exit".
 
 For other providers (OpenAI, Anthropic), see **Configuration** below.
 
@@ -137,24 +137,35 @@ Agent C provides these tools to assist with coding tasks:
 
 ```
 src/agentc/
-├── agent.py              # Entry point and event loop
-├── config.toml           # User configuration overrides
-├── personalities.toml    # Personality definitions
-├── providers.toml        # LLM provider definitions
-├── prompts/              # System prompts for each personality
+├── agent.py                  # Entry point and event loop
+├── config.toml               # User configuration overrides
+├── personalities.toml        # Personality definitions
+├── providers.toml            # LLM provider definitions
+├── prompts/                  # System prompts for each personality
 │   ├── coder.md
 │   ├── reviewer.md
 │   └── debugger.md
 ├── core/
-│   ├── agent_factory.py  # Agent creation and configuration
-│   ├── config.py         # Configuration loading
-│   ├── file_ops.py       # File operations with backup/restore
-│   ├── tools.py          # Tool definitions
-│   ├── types.py          # Type definitions
-│   └── __init__.py       # Core exports
+│   ├── agent_factory.py      # Agent creation and configuration
+│   ├── cli.py                # Command-line argument parsing
+│   ├── commands.py           # User command handling and execution
+│   ├── config.py             # TOML configuration file loading
+│   ├── file_ops.py           # File operations with backup/restore
+│   ├── types.py              # Type definitions and Pydantic models
+│   ├── _config.py            # Configuration utilities
+│   ├── _model.py             # Model selection and validation
+│   ├── _prompt.py            # Prompt loading and management
+│   ├── _provider.py          # Provider selection and initialization
+│   ├── tools/
+│   │   ├── agent_tools.py    # Agent delegation functionality
+│   │   ├── backup_tools.py   # Backup and restore operations
+│   │   ├── file_tools.py     # File read/write/search operations
+│   │   ├── registry.py       # Tool registry and discovery
+│   │   └── __init__.py
+│   └── __init__.py
 └── ui/
-    ├── console.py        # Terminal UI with Rich library
-    ├── protocol.py       # UI protocol definitions
+    ├── console.py            # Terminal UI with Rich library
+    ├── protocol.py           # UI protocol definitions
     └── __init__.py
 ```
 

@@ -12,9 +12,8 @@ User overrides in config.toml take precedence over default provider settings.
 """
 
 from importlib import import_module
-from pathlib import Path
-import tomllib
 
+from ._config import ConfigLocator
 from .types import AgentConfig, PersonalityConfig
 
 
@@ -44,8 +43,8 @@ def load_providers() -> dict:
     Returns:
         Dictionary of provider configurations.
     """
-    with open(Path(__file__).parent.parent / "providers.toml", "rb") as f:
-        return tomllib.load(f)
+    locator = ConfigLocator()
+    return locator.load_providers()
 
 
 def load_config_overrides() -> dict:
@@ -57,15 +56,8 @@ def load_config_overrides() -> dict:
     Returns:
         Dictionary of configuration overrides.
     """
-    try:
-        with open(Path(__file__).parent.parent / "config.toml", "rb") as f:
-            return tomllib.load(f)
-    except FileNotFoundError:
-        try:
-            with open("config.toml", "rb") as f:
-                return tomllib.load(f)
-        except FileNotFoundError:
-            return {}
+    locator = ConfigLocator()
+    return locator.load_config_overrides()
 
 
 def load_personalities_data() -> dict:
@@ -74,11 +66,8 @@ def load_personalities_data() -> dict:
     Returns:
         Dictionary of personality configurations.
     """
-    try:
-        with open(Path(__file__).parent.parent / "personalities.toml", "rb") as f:
-            return tomllib.load(f)
-    except FileNotFoundError:
-        return {}
+    locator = ConfigLocator()
+    return locator.load_personalities()
 
 
 def build_agent_configs(
