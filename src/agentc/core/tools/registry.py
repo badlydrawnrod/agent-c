@@ -4,7 +4,8 @@ from pydantic_ai import Tool
 
 from .agent_tools import delegate_to_agent
 from .backup_tools import list_backups, restore_backup
-from .file_tools import create_file, edit_file, list_files, read_file, search_files
+from .file_tools import (create_file, edit_file, list_files, read_file,
+                         search_files)
 
 
 class ToolRegistry:

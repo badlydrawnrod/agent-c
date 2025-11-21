@@ -2,13 +2,8 @@
 
 from pydantic_ai import ModelRetry, RunContext
 
-from ..file_ops import (
-    cleanup_old_backups,
-    create_backup,
-    safe_resolve,
-    safe_resolve_create,
-    write_and_verify,
-)
+from ..file_ops import (cleanup_old_backups, create_backup, safe_resolve,
+                        safe_resolve_create, write_and_verify)
 from ..types import RunDeps
 
 

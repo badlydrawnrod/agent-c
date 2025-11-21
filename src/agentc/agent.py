@@ -7,15 +7,9 @@ for the agent, delegating to core modules for all business logic.
 import asyncio
 import sys
 
-from agentc.core import (
-    CommandHandler,
-    CommandType,
-    create_agent,
-    create_agent_factory,
-    discover_tools,
-    load_configs,
-    parse_args,
-)
+from agentc.core import (CommandHandler, CommandType, create_agent,
+                         create_agent_factory, discover_tools, load_configs,
+                         parse_args)
 from agentc.core.types import RunDeps
 from agentc.ui import ConsoleUI
 

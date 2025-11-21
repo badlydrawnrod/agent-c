@@ -151,6 +151,7 @@ src/agentc/
 │   ├── commands.py           # User command handling and execution
 │   ├── config.py             # TOML configuration file loading
 │   ├── file_ops.py           # File operations with backup/restore
+│   ├── runner.py             # Agent execution and tool loop
 │   ├── types.py              # Type definitions and Pydantic models
 │   ├── _config.py            # Configuration utilities
 │   ├── _model.py             # Model selection and validation

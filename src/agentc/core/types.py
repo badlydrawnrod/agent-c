@@ -6,7 +6,7 @@ the dependencies injected into the agent's run context.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Dict, Protocol
 
 from pydantic import BaseModel
 
@@ -61,3 +61,37 @@ class RunDeps:
     agent_factory: (
         Callable[[str], "Agent[RunDeps, str | DeferredToolRequests]"] | None
     ) = None
+
+
+@dataclass
+class StreamChunk:
+    """Represents a chunk of streamed text from the agent."""
+
+    text: str
+
+
+@dataclass
+class ApprovalRequest:
+    """Request for user approval of a tool call."""
+
+    tool_name: str
+    tool_call_id: str
+    params: Dict[str, Any] | str | None
+
+
+class LoopCallbacks(Protocol):
+    """Protocol for UI callbacks used by the interaction loop."""
+
+    def on_thinking(self) -> None: ...
+
+    def on_stream_chunk(self, chunk: StreamChunk) -> None: ...
+
+    def on_stream_complete(self) -> None: ...
+
+    def on_status_update(self, status: str) -> None: ...
+
+    def on_cancelled(self, message: str) -> None: ...
+
+    async def request_approval(self, req: ApprovalRequest) -> bool: ...
+
+    def on_thinking_chunk(self, chunk: str) -> None: ...

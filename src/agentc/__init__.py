@@ -5,14 +5,8 @@ personalities and LLM providers.
 """
 
 from .agent import main
-from .core import (
-    AgentConfig,
-    PersonalityConfig,
-    RunDeps,
-    ToolRegistry,
-    create_agent,
-    load_configs,
-)
+from .core import (AgentConfig, PersonalityConfig, RunDeps, ToolRegistry,
+                   create_agent, load_configs)
 
 __all__ = [
     "main",
