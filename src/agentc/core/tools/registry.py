@@ -15,17 +15,21 @@ class ToolRegistry:
     tools without coupling them to the main agent.py module.
     """
 
-    def __init__(self):
-        """Initialize the tool registry with default tools."""
+    def __init__(self, strict: bool = True):
+        """Initialize the tool registry with default tools.
+
+        Args:
+            strict: Whether to enforce strict argument validation (default: True).
+        """
         self._tools: list[Tool] = [
-            Tool(read_file, takes_ctx=True, strict=True),
-            Tool(list_files, takes_ctx=True, strict=True),
-            Tool(edit_file, takes_ctx=True, strict=True, requires_approval=True),
-            Tool(create_file, takes_ctx=True, strict=True, requires_approval=True),
-            Tool(search_files, takes_ctx=True, strict=True),
-            Tool(delegate_to_agent, takes_ctx=True, strict=True),
-            Tool(list_backups, takes_ctx=True, strict=True),
-            Tool(restore_backup, takes_ctx=True, strict=True, requires_approval=True),
+            Tool(read_file, takes_ctx=True, strict=strict),
+            Tool(list_files, takes_ctx=True, strict=strict),
+            Tool(edit_file, takes_ctx=True, strict=strict, requires_approval=True),
+            Tool(create_file, takes_ctx=True, strict=strict, requires_approval=True),
+            Tool(search_files, takes_ctx=True, strict=strict),
+            Tool(delegate_to_agent, takes_ctx=True, strict=strict),
+            Tool(list_backups, takes_ctx=True, strict=strict),
+            Tool(restore_backup, takes_ctx=True, strict=strict, requires_approval=True),
         ]
 
     def register(self, tool: Tool) -> None:

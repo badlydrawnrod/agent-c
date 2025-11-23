@@ -60,7 +60,9 @@ def create_agent(
     system_prompt = build_system_prompt(personality, personality_name, personalities)
 
     # 5. Get tools from registry
-    registry = ToolRegistry()
+    # Google/Gemini models appear to struggle with strict tool validation.
+    is_google = config.provider_cls.__module__.startswith("pydantic_ai.providers.google")
+    registry = ToolRegistry(strict=not is_google)
     tools = registry.get_all()
 
     # 6. Create and return configured agent

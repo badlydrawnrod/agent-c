@@ -18,3 +18,18 @@ def test_discover_only_first_line():
 
     expected = "- tool1: first line\n- tool2: single line\n- tool3: "
     assert result == expected
+
+
+def test_registry_strict_mode():
+    """ToolRegistry should respect the strict parameter."""
+    from agentc.core.tools.registry import ToolRegistry
+
+    # Test default (strict=True)
+    registry = ToolRegistry()
+    for tool in registry.get_all():
+        assert tool.strict is True
+
+    # Test strict=False
+    registry = ToolRegistry(strict=False)
+    for tool in registry.get_all():
+        assert tool.strict is False
