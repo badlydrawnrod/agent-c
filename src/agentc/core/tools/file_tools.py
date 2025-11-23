@@ -1,19 +1,53 @@
-"""File operation tools for Agent C."""
+import re
 
 from pydantic_ai import ModelRetry, RunContext
 
-from ..file_ops import (cleanup_old_backups, create_backup, safe_resolve,
-                        safe_resolve_create, write_and_verify)
+from ..file_ops import (
+    cleanup_old_backups,
+    create_backup,
+    safe_resolve,
+    safe_resolve_create,
+    write_and_verify,
+)
 from ..types import RunDeps
 
 
+def _cat_n_format(text: str) -> str:
+    """Return `text` with `cat -n` style line numbers.
+
+    Each line is prefixed with a right-aligned 6-character line number
+    followed by a tab, matching the typical `cat -n` output.
+    """
+    lines = text.splitlines()
+    # Preserve a trailing newline if present on the original text
+    trailing_newline = text.endswith("\n")
+    numbered = [f"{i:6}\t{line.rstrip()}" for i, line in enumerate(lines, 1)]
+    result = "\n".join(numbered)
+    if trailing_newline:
+        result += "\n"
+    return result
+
+
 def read_file(ctx: RunContext[RunDeps], path: str) -> str:
-    """Read the contents of a file."""
+    """Read the contents of a text file and return cat -n style output.
+
+    Usage:
+    - The output will be numbered like `cat -n` (leading line numbers, tab,
+      then line text).
+    - If the file cannot be decoded as UTF-8 it will raise `ModelRetry`
+      indicating the path must be a text file.
+    """
     ctx.deps.info(f"Reading file: {path}")
     resolved_path = safe_resolve(path)
     if not resolved_path.is_file():
         raise ModelRetry("Path must be a file")
-    return resolved_path.read_text(encoding="utf-8")
+    try:
+        text = resolved_path.read_text(encoding="utf-8")
+    except Exception:
+        # Can't decode as text - treat as non-text/binary for tools
+        raise ModelRetry("Path must be a text file")
+
+    return _cat_n_format(text)
 
 
 def list_files(ctx: RunContext[RunDeps], path: str) -> str:
@@ -26,7 +60,23 @@ def list_files(ctx: RunContext[RunDeps], path: str) -> str:
 
 
 def edit_file(ctx: RunContext[RunDeps], path: str, old_str: str, new_str: str) -> str:
-    """Edit a file by replacing old_str with new_str."""
+    """Edit a file by replacing old_str with new_str.
+
+    Usage:
+    - You must use the `read_file` tool at least once in the conversation
+      before editing. The tool will error if you attempt an edit without
+      reading the file first.
+    - When editing text from `read_file` tool output, ensure you preserve
+      the exact indentation (tabs/spaces) as it appears AFTER the line
+      number prefix. The line number prefix format is: spaces + line number
+      + tab. Everything after that tab is the actual file content to match.
+      Never include any part of the line number prefix in old_str or new_str.
+    - old_str must be unique in the file. If the string appears multiple
+      times, provide a larger string with more surrounding context to make
+      it unique, or you can ask the user for clarification.
+    - Always preserve the exact formatting and indentation of the original
+      code when making replacements.
+    """
     ctx.deps.info(f"Editing file: {path}")
     resolved_path = safe_resolve(path)
     if not resolved_path.is_file():
