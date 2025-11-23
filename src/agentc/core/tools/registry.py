@@ -47,10 +47,20 @@ class ToolRegistry:
     def discover(self) -> str:
         """Discover and format information about available tools.
 
+        Only the first line of each tool.description is returned so multi-line
+        docstrings or descriptions don't make the discover output noisy.
+
         Returns:
-            Formatted string describing all available tools.
+            Formatted string describing all available tools (first line only).
         """
-        return "\n".join(f"- {tool.name}: {tool.description}" for tool in self._tools)
+        def first_line(desc: str | None) -> str:
+            if not desc:
+                return ""
+            # Split on line breaks and take the first line, trimming surrounding
+            # whitespace so outputs are tidy.
+            return desc.splitlines()[0].strip()
+
+        return "\n".join(f"- {tool.name}: {first_line(tool.description)}" for tool in self._tools)
 
 
 def discover_tools() -> str:
