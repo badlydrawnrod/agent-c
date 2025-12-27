@@ -5,115 +5,119 @@
 - **Python**: 3.13+ required (no legacy Python support needed)
 - **Package Manager**: `uv` (standalone installer)
 
-## Commands
+## Quick Start Commands
 
 - **Install deps**: `uv sync`
   - (Windows PowerShell) Create & activate venv then install:
     ```powershell
-    python -m venv .venv; .\.venv\Scripts\Activate.ps1; uv sync
+    python -m venv .venv; .\venv\Scripts\Activate.ps1; uv sync
     ```
-- **Run agent**: `uv run agent-c --personality coder`
-- **Run agent with provider override**: `uv run agent-c --personality coder --provider anthropic`
-- **Run agent with model override**: `uv run agent-c --personality coder --model gpt-4`
+- **Run legacy agent**: `uv run agent-c --personality coder`
+- **Run Textual UI (agentc_next)**: `uv run run-textual`
+- **Run Console UI (agentc_next)**: `uv run run-console`
 - **Test all**: `uv run pytest`
-- **Test single**: `uv run pytest path/to/test.py::test_function`
+- **Test agentc_next only**: `uv run pytest tests/agentc_next/`
 - **Type check**: `uv run mypy`
 - **Lint**: `uv run ruff check`
 - **Format**: `uv run ruff format`
-- **Run without install**: `uvx --from . agent-c --personality coder`
 
-## Quickstart (Windows PowerShell)
+## Windows PowerShell Quickstart
 
-- Create a Python venv and activate it, then install dependencies:
-  ```powershell
-  python -m venv .venv; .\.venv\Scripts\Activate.ps1; uv sync
-  ```
-- Run the agent locally with the `coder` personality:
-  ```powershell
-  uv run agent-c --personality coder
-  ```
-- Run with provider / model overrides:
-  ```powershell
-  uv run agent-c --personality coder --provider anthropic
-  uv run agent-c --personality coder --model gpt-4
-  ```
+```powershell
+python -m venv .venv; .\venv\Scripts\Activate.ps1; uv sync
+uv run run-textual  # Launch the Textual UI
+```
 
-## Architecture
+## Architecture Overview
 
-### Core Modules
+The project contains two main implementations:
 
-- **`agent.py`**: Entry point and event loop orchestration
-- **`core/agent_factory.py`**: Agent creation and configuration management
-- **`core/cli.py`**: Command-line argument parsing
-- **`core/commands.py`**: User command handling and execution
-- **`core/config.py`**: TOML configuration file loading
-- **`core/file_ops.py`**: File operations with backup/restore capability
-- **`core/runner.py`**: Agent execution loop, streaming, and tool handling
-- **`core/types.py`**: Type definitions, Pydantic models, and LoopCallbacks protocol
-- **`core/_config.py`**: Configuration utilities
-- **`core/_model.py`**: Model selection and validation
-- **`core/_prompt.py`**: Prompt loading and management
-- **`core/_provider.py`**: Provider selection and initialization
-- **`core/tools/`**: Tool definitions and registry
-  - **`file_tools.py`**: File read/write/search operations
-  - **`agent_tools.py`**: Agent delegation functionality
-  - **`backup_tools.py`**: Backup and restore operations
-  - **`registry.py`**: Tool registry and discovery
-- **`ui/console.py`**: Terminal UI using Rich library (handles streaming & thinking)
-- **`ui/protocol.py`**: UI protocol definitions
+### Legacy Implementation (`src/agentc/`)
+Traditional monolithic agent with file operations, multiple personalities, and CLI interface.
 
-### Repository layout notes
+### Next-Generation Implementation (`src/agentc_next/`)
+Event-driven, layered architecture with:
+- **`core/`**: Agnostic agentic logic (types, event loop, agent factory, tools). No UI or framework dependencies.
+- **`middleware/`**: Cross-cutting concerns (e.g., debouncing)
+- **`adapters/`**: Bridges core event stream to specific frameworks. Owns translation logic and UI-specific message types.
+- **`ui/`**: User interface implementations (Textual TUI, Console)
 
-- `src/agentc/` contains the source for the `agentc` package. This project uses a `src` layout for cleaner imports and packaging.
-- `build/` contains wheels and installed copies for distribution or quick local checks.
-- `.venv/` is the recommended local virtual environment name to store project dependencies.
+## Code Style & Architecture Rules (agentc_next)
 
-### Configuration Files (in `src/agentc/`)
+When working on `agentc_next`, follow these rules strictly:
 
-- **`providers.toml`**: LLM provider definitions (Ollama, Anthropic, OpenAI, etc.)
-- **`personalities.toml`**: Agent personality definitions with prompt and provider mappings
-- **`config.toml`**: User overrides for provider settings, API keys, and model selection
-- **`prompts/`**: Markdown files containing system prompts for each personality
+### Layering & Dependencies
+- **Layer stack**: types (core) / loop / middleware / adapter / UI
+- State the layer(s) you change **before** modifying code
+- No cross-layer imports from `core` to `ui`
+- If data flows across layers, add a typed dataclass to `src/agentc_next/core/types.py`
 
-## Code Style
+### Event-Driven Pattern
+- The run loop is a bidirectional async generator
+- Preserve explicit `ApprovalRequest` → `ApprovalResponse` send/receive via `asend`
+- All events defined in `core/types.py`
 
+### Typing & Style
 - **Language**: Python 3.13+, use modern Python features freely
 - **Type hints**: Full type annotations required (MyPy strict mode)
-- **Linting**: Ruff for linting and formatting
+- All new or modified public functions must have full type annotations and docstrings
+- Use `Protocol` for interfaces, `TypeAlias` for complex types, `@dataclass` for event/value objects
 - **Imports**: Standard library → third-party → local
 - **Paths**: Use `pathlib.Path`, never string paths
-- **Data**: Pydantic models for validation
 - **Errors**: Custom exceptions with descriptive messages
-- **Formatting**: Auto-format with `uv run ruff format`
+
+### Tools & Formatting
+- **Linting**: Ruff for linting and formatting
 - **Console output**: Rich library for terminal formatting
-- **User input**: Prompt Toolkit library
 - **Async**: Use `async`/`await` pattern for I/O operations
 
-## Development
+### Testing (Mandatory)
+Maintain and update the test suite in `tests/agentc_next/`. Must cover:
+- `core.loop`: approval handshake, history, and tool call yielding
+- `middleware.debouncing`: flush logic and delta aggregation
+- `adapters.textual`: mapping to `adapters.messages`
+- `core.tool_parsing`: robust JSON argument handling
 
-- Activate the local venv then run linters, type checks, and tests frequently:
-  ```powershell
-  .\.venv\Scripts\Activate.ps1; uv run ruff check; uv run mypy; uv run pytest
-  ```
-- Run a single test for quick feedback:
-  ```powershell
-  uv run pytest tests/test_core_interaction.py::test_command
-  ```
-- Run tests with coverage (if `pytest-cov` is in dev-deps):
-  ```powershell
-  uv run pytest --cov=src/agentc
-  ```
+## Development Workflow
 
-## Configuration & secrets
+1. **Activate the venv** and run frequent checks:
+   ```powershell
+   .\venv\Scripts\Activate.ps1
+   uv run ruff check; uv run mypy; uv run pytest tests/agentc_next/
+   ```
 
-- The `config.toml` in `src/agentc/` holds configuration overrides (provider settings, model defaults, and API keys). Set provider credentials with environment variables or copy `config.toml` into a local file and update values.
+2. **Run a single test** for quick feedback:
+   ```powershell
+   uv run pytest tests/agentc_next/core/test_loop.py::test_agent_session_history
+   ```
+
+3. **Before submitting changes**, verify:
+   - [ ] `uv run ruff check` passes (no linting issues)
+   - [ ] `uv run mypy` passes (no type errors)
+   - [ ] `uv run pytest tests/agentc_next/` passes (all tests green)
+   - [ ] Updated tests for any new functionality
+   - [ ] Updated docstrings for public APIs
+
+## Configuration & Secrets
+
+- The `config.toml` files in `src/agentc/` and `src/agentc_next/` hold configuration overrides
+- Set provider credentials with environment variables or update local config files
+- Example: `export ANTHROPIC_API_KEY=your_key` (Linux/macOS) or `$env:ANTHROPIC_API_KEY = 'your_key'` (PowerShell)
+
+## Code Review Checklist
+
+When contributing to `agentc_next`:
+1. **Verify layering**: State which layers you modified
+2. **Check types**: All public functions fully annotated
+3. **Validate tests**: New tests cover changes, all existing tests pass
+4. **Ensure async patterns**: Proper use of `async`/`await` and `asend` for handshakes
+5. **Review imports**: No circular dependencies, respect layer boundaries
+6. **Run all checks**: `ruff check`, `mypy`, and `pytest tests/agentc_next/`
 
 ## Build and Distribution
 
 - **Build system**: `uv_build`
-- **Entry point**: `agentc.agent:main` (agent-c command)
-- **Package includes**:
-  - All Python files in `agentc/`
-  - TOML config files
-  - Markdown prompt files
-  - UI module files
+- **Entry points**:
+  - `agentc.agent:main` (legacy agent-c command)
+  - `agentc_next.ui.run_textual:main` (run-textual)
+  - `agentc_next.ui.run_console:main` (run-console)

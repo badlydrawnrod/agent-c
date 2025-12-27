@@ -1,362 +1,533 @@
 from __future__ import annotations
 
-import contextlib
-from typing import Any
+import asyncio
+from typing import Any, Awaitable, Callable
 
-from prompt_toolkit import PromptSession
-from prompt_toolkit.completion import Completer, Completion
-from prompt_toolkit.input import create_input
-from prompt_toolkit.input.base import Input
+from prompt_toolkit.application import Application
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.filters import Condition
+from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.keys import Keys
-from prompt_toolkit.styles import Style
-from pydantic_ai import Agent, DeferredToolRequests
-from pydantic_ai.messages import ModelMessage
-from rich.console import Console
-from rich.live import Live
-from rich.markdown import Markdown
-from rich.text import Text
+from prompt_toolkit.layout import Dimension, HSplit, Layout, VerticalAlign, Window
+from prompt_toolkit.layout.containers import (
+    ConditionalContainer,
+    DynamicContainer,
+    Float,
+    FloatContainer,
+)
+from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
+from prompt_toolkit.lexers import PygmentsLexer
+from prompt_toolkit.styles import Style, merge_styles
+from prompt_toolkit.styles.pygments import style_from_pygments_cls
+from prompt_toolkit.widgets import Frame, TextArea
+from pygments.lexers.markup import MarkdownLexer
+from pygments.styles import get_style_by_name
 
-from agentc.core.runner import AgentRunner
 from agentc.core.types import ApprovalRequest, StreamChunk
+from agentc.tui.widgets import (
+    InstrumentedScrollablePane,
+    ScrollablePaneConfig,
+    ScrollController,
+)
 
 from .protocol import UIProtocol
 
-# Human-facing UI text (owned by the UI implementation).
-DEFAULT_THINKING_TEXT = "Agent C is thinking..."
-DEFAULT_RESPONDING_BASE = "Agent C is replying..."
+# -- Styles & Constants -------------------------------------------------------
+
+BASE_UI_STYLE = Style.from_dict(
+    {
+        "frame.border": "#2f3542",
+        "frame.label": "#ced6e0 italic",
+        "text-area": "bg:#0b1220 #dbeafe",
+        "thinking-text": "bg:default #94a3b8 italic",
+        "user-prompt": "bg:#1e3a5f #60a5fa bold",
+        "user-prompt-label": "#60a5fa bold",
+        "placeholder": "#64748b italic",
+        "status-indicator": "bg:#1e293b #f59e0b",
+        "status-hint": "#94a3b8",
+        "bottom-toolbar": "#000000 bg:#007f00",
+    }
+)
+PYGMENTS_STYLE = style_from_pygments_cls(get_style_by_name("nord"))
+APP_STYLE = merge_styles([BASE_UI_STYLE, PYGMENTS_STYLE])
+
+
+# -- Helpers ------------------------------------------------------------------
+
+
+def _to_container(obj: Any) -> Any:
+    """Convert a widget-like object to its container representation."""
+    c = getattr(obj, "__pt_container__", None)
+    if callable(c):
+        return c()
+    if c is not None:
+        return c
+    return obj
+
+
+def _display_only_text_area(text: str = "", style: str | None = None) -> TextArea:
+    """Create a TextArea configured for read-only display."""
+    area = TextArea(
+        text=text,
+        read_only=True,
+        focusable=False,
+        wrap_lines=True,
+        lexer=PygmentsLexer(MarkdownLexer),
+    )
+    _update_textarea_height(area)
+    return area
+
+
+def _thinking_text_area() -> TextArea:
+    area = TextArea(
+        text="",
+        read_only=True,
+        focusable=False,
+        wrap_lines=True,
+        style="class:thinking-text",
+    )
+    _update_textarea_height(area)
+    return area
+
+
+def _user_prompt_area(text: str = "") -> TextArea:
+    """Create a TextArea configured for displaying user prompts."""
+    area = TextArea(
+        text=text,
+        read_only=True,
+        focusable=False,
+        wrap_lines=True,
+        style="class:user-prompt",
+    )
+    _update_textarea_height(area)
+    return area
+
+
+def _update_textarea_height(area: TextArea) -> None:
+    line_count = max(1, area.text.count("\n") + 1 if area.text else 1)
+    area.window.height = Dimension(preferred=line_count, max=line_count)
+
+
+class ThrottledInvalidator:
+    """Coalesce frequent invalidate() requests into a fixed interval."""
+
+    def __init__(
+        self,
+        invalidate_fn: Callable[[], None],
+        interval: float,
+        loop: asyncio.AbstractEventLoop,
+    ) -> None:
+        self._invalidate = invalidate_fn
+        self._interval = interval
+        self._loop = loop
+        self._last_call = 0.0
+        self._pending_handle: asyncio.TimerHandle | None = None
+
+    def request(self) -> None:
+        # Ensure we are on the loop
+        try:
+            curr = asyncio.get_running_loop()
+        except RuntimeError:
+            curr = None
+
+        if curr == self._loop:
+            self._request_on_loop()
+        else:
+            self._loop.call_soon_threadsafe(self._request_on_loop)
+
+    def _request_on_loop(self) -> None:
+        now = self._loop.time()
+        elapsed = now - self._last_call
+        if elapsed >= self._interval:
+            self._last_call = now
+            self._invalidate()
+            return
+
+        if self._pending_handle is None:
+            delay = self._interval - elapsed
+            self._pending_handle = self._loop.call_later(delay, self._flush)
+
+    def _flush(self) -> None:
+        self._pending_handle = None
+        self._last_call = self._loop.time()
+        self._invalidate()
+
+
+class ThinkingPane:
+    def __init__(self, index: int) -> None:
+        self.index = index
+        self.collapsed = False
+        self.textarea = _thinking_text_area()
+        self.frame = Frame(self.textarea, title=f"Thinking #{index}")
+        self.container = ConditionalContainer(
+            content=self.frame,
+            filter=Condition(lambda: not self.collapsed),
+        )
+
+    def toggle(self) -> None:
+        self.collapsed = not self.collapsed
+
+
+# -- ConsoleUI Implementation -------------------------------------------------
 
 
 class ConsoleUI(UIProtocol):
-    """Terminal-based UI implementation using Rich and prompt_toolkit."""
+    """Terminal-based UI implementation using prompt_toolkit and custom widgets."""
 
     def __init__(self, personalities: dict[str, Any]):
         self.personalities = personalities
-        self.console = Console()
-        self.session = self._create_prompt_session()
-        self.approval_session = self._create_approval_session()
-        self.style = self._create_style()
-        # Live/status reactive state used by callbacks
-        self._live: Live | None = None
-        self._spinner_text: str = DEFAULT_THINKING_TEXT
-        self._accumulated_text: str = ""
-        self._accumulated_thinking: str = ""
-        self._input_source: Input | None = None
+        self.app: Application | None = None
+        self.loop: asyncio.AbstractEventLoop | None = None
 
-    def _create_prompt_session(self) -> PromptSession:
-        """Create prompt session with key bindings and command completion."""
-        kb = KeyBindings()
+        # UI Components
+        self.hsplit = HSplit([], align=VerticalAlign.BOTTOM)
+        self.input_buffer = Buffer(history=InMemoryHistory(), multiline=True)
+        self.scroll_controller: ScrollController | None = None
+        self.invalidator: ThrottledInvalidator | None = None
 
-        from prompt_toolkit.application.current import get_app
-        from prompt_toolkit.filters import Condition
+        # State
+        self.thinking_panes: list[ThinkingPane] = []
+        self.current_thinking_pane: ThinkingPane | None = None
+        self.current_response_area: TextArea | None = None
+        self.submit_event = asyncio.Event()
+        self.exit_requested = False
+        self.approval_event = asyncio.Event()
+        self.approval_result = False
+        self.is_approving = False
+        self.input_handler: Callable[[str], Awaitable[None]] | None = None
 
-        @kb.add(
-            "enter",
-            filter=Condition(
-                lambda: bool(get_app().current_buffer)
-                and get_app().current_buffer.multiline()
+    def _create_layout(self) -> Layout:
+        # Input Panel
+        def get_placeholder():
+            if not self.input_buffer.text:
+                if self.is_approving:
+                    return [
+                        (
+                            "class:placeholder",
+                            "Type 'y' to approve, 'n' to deny... (Ctrl+Enter to submit)",
+                        )
+                    ]
+                return [
+                    (
+                        "class:placeholder",
+                        "Type your message here... (Ctrl+Enter to submit, Enter for new line)",
+                    )
+                ]
+            return []
+
+        input_control = BufferControl(buffer=self.input_buffer, focus_on_click=True)
+        input_window = Window(content=input_control, height=Dimension.exact(3))
+        input_with_placeholder = FloatContainer(
+            content=input_window,
+            floats=[
+                Float(
+                    content=Window(
+                        content=FormattedTextControl(get_placeholder),
+                        dont_extend_height=True,
+                    )
+                )
+            ],
+        )
+        def get_input_frame():
+            if self.is_approving:
+                return Frame(
+                    input_with_placeholder,
+                    title="Approval Required (y/n)",
+                    style="class:status-indicator",
+                )
+            return Frame(input_with_placeholder, title="Input")
+
+        input_panel = DynamicContainer(get_input_frame)
+
+        # Scrollable Output
+        def is_manual_scroll_active() -> bool:
+            if self.scroll_controller:
+                return not self.scroll_controller.is_auto_following
+            return False
+
+        scrollable_pane = InstrumentedScrollablePane(
+            self.hsplit,
+            config=ScrollablePaneConfig(
+                keep_cursor_visible=Condition(lambda: not is_manual_scroll_active()),
+                keep_focused_window_visible=Condition(
+                    lambda: not is_manual_scroll_active()
+                ),
             ),
         )
-        def _(event):
-            # Only insert a newline when the active buffer is in multiline mode.
-            # This prevents single-line prompts (like approvals) from capturing
-            # the Enter key and *not* submitting the input.
-            event.current_buffer.newline()
 
-        @kb.add("escape", "enter")
+        # Status Bar (Manual Scroll Indicator)
+        def get_status_text():
+            if not is_manual_scroll_active():
+                return []
+            pct = 0
+            if scrollable_pane.virtual_height > 0:
+                max_scroll = max(
+                    0, scrollable_pane.virtual_height - scrollable_pane.visible_height
+                )
+                if max_scroll > 0:
+                    pct = int((scrollable_pane.vertical_scroll / max_scroll) * 100)
+                else:
+                    pct = 100
+            return [
+                ("class:status-indicator", f" 🔒 MANUAL SCROLL {pct}% "),
+                ("class:status-hint", " Press Ctrl+End to resume auto-follow "),
+            ]
+
+        status_window = ConditionalContainer(
+            content=Window(
+                content=FormattedTextControl(get_status_text),
+                height=Dimension.exact(1),
+                style="class:status-bar",
+            ),
+            filter=Condition(is_manual_scroll_active),
+        )
+
+        # Approval Prompt (Overlay)
+        def get_approval_prompt():
+            if self.is_approving:
+                return [("class:status-indicator", " APPROVAL REQUESTED (y/n) ")]
+            return []
+
+        approval_window = ConditionalContainer(
+            content=Window(
+                content=FormattedTextControl(get_approval_prompt),
+                height=Dimension.exact(1),
+                style="class:status-indicator",
+            ),
+            filter=Condition(lambda: self.is_approving),
+        )
+
+        # Main Layout
+        root_container = HSplit(
+            [
+                scrollable_pane,
+                status_window,
+                approval_window,
+                input_panel,
+            ]
+        )
+
+        layout = Layout(container=root_container, focused_element=input_control)
+
+        # Initialize Controller & Invalidator
+        # Note: We can't fully init them until we have the app, but we can prep the pane
+        # We'll attach the invalidator in run_agent_interaction
+        self._scrollable_pane_ref = scrollable_pane
+
+        return layout
+
+    def _create_key_bindings(self) -> KeyBindings:
+        kb = KeyBindings()
+
+        @kb.add("c-c")
         def _(event):
-            event.current_buffer.validate_and_handle()
+            event.app.exit()
 
         @kb.add("c-j")
         def _(event):
-            event.current_buffer.validate_and_handle()
+            """Submit input."""
+            text = self.input_buffer.text
+            if text.strip():
+                self.input_buffer.append_to_history()
+            self.input_buffer.reset()
+            
+            # If we are waiting for approval, signal it
+            if self.is_approving:
+                self.submit_event.set()
+                return
 
-        class SlashCommandCompleter(Completer):
-            def __init__(self, personalities: dict[str, Any]):
-                self.personalities = personalities
+            # Otherwise, handle as normal input
+            if self.input_handler:
+                asyncio.create_task(self.input_handler(text))
 
-            def get_completions(self, document, complete_event):
-                text = document.text_before_cursor
-                if text.strip() == "" or text.startswith("/"):
-                    command_help = {
-                        "/bye": "Exit the chat",
-                        "/clear": "Clear the context",
-                        "/exit": "Exit the chat",
-                        "/personality": "Switch to a different personality",
-                        "/quit": "Exit the chat",
-                        "/reset": "Clear the context",
-                    }
-                    for cmd in command_help:
-                        if cmd.startswith(text):
-                            yield Completion(
-                                cmd,
-                                start_position=-len(text),
-                                display_meta=command_help[cmd],
-                            )
-                    if text.startswith("/personality "):
-                        prefix = "/personality "
-                        remaining = text[len(prefix) :]
-                        for name, config in self.personalities.items():
-                            if name.startswith(remaining):
-                                yield Completion(
-                                    name,
-                                    start_position=-len(remaining),
-                                    display_meta=config.description,
-                                )
+        @kb.add("up")
+        def _(event):
+            if event.app.layout.has_focus(self.input_buffer):
+                if self.input_buffer.document.cursor_position_row == 0:
+                    self.input_buffer.history_backward()
+                else:
+                    self.input_buffer.cursor_up()
+            elif self.scroll_controller:
+                self.scroll_controller.scroll_lines(-1)
 
-        return PromptSession(
-            key_bindings=kb,
-            multiline=True,
-            completer=SlashCommandCompleter(self.personalities),
-        )
+        @kb.add("down")
+        def _(event):
+            if event.app.layout.has_focus(self.input_buffer):
+                if (
+                    self.input_buffer.document.cursor_position_row
+                    == self.input_buffer.document.line_count - 1
+                ):
+                    self.input_buffer.history_forward()
+                else:
+                    self.input_buffer.cursor_down()
+            elif self.scroll_controller:
+                self.scroll_controller.scroll_lines(1)
 
-    def _create_approval_session(self) -> PromptSession:
-        """Create a dedicated single-line prompt session for approvals."""
-        # Use a fresh session so approval prompts don't inherit the multiline
-        # bindings from the main chat prompt.
-        return PromptSession(multiline=False)
+        @kb.add("pageup")
+        def _(event):
+            if self.scroll_controller:
+                self.scroll_controller.scroll_pages(-1)
 
-    @contextlib.contextmanager
-    def _suspend_keyboard_capture(self):
-        """Temporarily release the low-level stdin hook used for hotkeys."""
-        if self._input_source is None:
-            yield
-            return
+        @kb.add("pagedown")
+        def _(event):
+            if self.scroll_controller:
+                self.scroll_controller.scroll_pages(1)
 
-        with self._input_source.detach():
-            yield
+        @kb.add("c-home")
+        def _(event):
+            if self.scroll_controller:
+                self.scroll_controller.scroll_to_top()
 
-    def _create_style(self) -> Style:
-        """Create the prompt style."""
-        return Style.from_dict(
-            {
-                "bottom-toolbar": "#000000 bg:#007f00",
-                "rprompt": "#ff0000",
-                "frame.border": "#884444",
-                "completion-menu": "bg:#000000 #ffffff",
-                "completion-menu.meta.completion": "bg:#000000 #7f7f7f",
-                "completion-menu.meta.completion.current": "bg:#000000 #bfbfbf",
-                "scrollbar.background": "bg:#000000",
-                "scrollbar.button": "bg:#000000",
-                "scrollbar.track": "bg:#000000",
-                "scrollbar.track.hover": "bg:#000000",
-            }
-        )
+        @kb.add("c-end")
+        def _(event):
+            if self.scroll_controller:
+                self.scroll_controller.scroll_to_bottom()
+
+        @kb.add("c-t")
+        def _(event):
+            if self.thinking_panes:
+                self.thinking_panes[-1].toggle()
+                if self.invalidator:
+                    self.invalidator.request()
+
+        return kb
 
     async def show_intro(self, tools_info: str) -> None:
         """Display the introduction message."""
         logo = r"""
-    ___                    __     ______
-   /   | ____ ____  ____  / /_   / ____/
-  / /| |/ __ `/ _ \/ __ \/ __/  / /
- / ___ / /_/ /  __/ / / / /_   / /___
-/_/  |_\__, /\___/_/ /_/\__/   \____/
-      /____/
+     ___                    __     ______
+    /   | ____ ____  ____  / /_   / ____/
+   / /| |/ __ `/ _ \/ __ \/ __/  / /
+  / ___ / /_/ /  __/ / / / /_   / /___
+ /_/  |_\__, /\___/_/ /_/\__/   \____/
+       /____/
 """
-        intro = Text(logo)
-        intro.append("\nI'm Agent C, a helpful coding agent.\n\n")
-        intro.append(
+        intro_text = (
+            f"{logo}\n"
+            "I'm Agent C, a helpful coding agent.\n\n"
             "You can ask me to perform various code editing tasks using the available tools:\n"
+            f"{tools_info}\n\n"
+            "**This is a tech demo, so please be sensible. You are responsible for your files**"
         )
-        intro.append(tools_info)
-        intro.append("\n\n")
-        intro.append(
-            "This is a tech demo, so please be sensible. You are responsible for your files",
-            style="bold red",
-        )
-
-        self.console.print(intro)
+        area = _display_only_text_area(intro_text)
+        self.hsplit.children.append(_to_container(area))
 
     def show_info(self, message: str) -> None:
         """Display an informational message."""
-        self.console.print(f"[dim]--- {message}[/dim]")
+        # Ensure we are on the loop
+        try:
+            curr = asyncio.get_running_loop()
+        except RuntimeError:
+            curr = None
+            
+        if self.loop and curr != self.loop:
+            self.loop.call_soon_threadsafe(self.show_info, message)
+            return
+
+        area = _display_only_text_area(f"_{message}_")
+        self.hsplit.children.append(_to_container(area))
+        self._invalidate()
 
     async def get_user_input(self) -> str | None:
-        """Get input from the user. Returns None if user wants to exit."""
-
-        def bottom_toolbar():
-            return [("class:bottom-toolbar", "Ctrl+Enter submits")]
-
-        def rprompt():
-            return [("class:rprompt", "")]
-
-        try:
-            user_input = await self.session.prompt_async(
-                "> ",
-                style=self.style,
-                show_frame=True,
-                bottom_toolbar=bottom_toolbar,
-                rprompt=rprompt,
-            )
-            return user_input
-        except KeyboardInterrupt:
-            return None
+        """Deprecated: Input is now handled via callback."""
+        raise NotImplementedError("get_user_input is deprecated in this UI")
 
     async def ask_approval(
         self, tool_name: str, tool_call_id: str, params: dict | str | None
     ) -> bool:
-        """Ask the user to approve a tool call. Returns True if approved."""
-        prompt = f"The LLM wants to call {tool_name}. Allow (y/n): "
-        # Approval prompts should be single-line so that Enter submits the
-        # choice. A dedicated prompt session prevents the multiline bindings
-        # from the main chat input from intercepting Enter.
+        """Ask for approval via the TUI."""
+        self.is_approving = True
+        msg = f"**Approval Request**\nTool: `{tool_name}`\nParams: `{params}`\n\nAllow? (y/n)"
+        area = _display_only_text_area(msg)
+        frame = Frame(area, title="Approval Needed", style="class:status-indicator")
+        self.hsplit.children.append(_to_container(frame))
+        self._invalidate()
+        self._auto_scroll()
+
         try:
-            result = await self.approval_session.prompt_async(
-                prompt,
-                show_frame=True,
-                multiline=False,
-                style=self.style,
-            )
-        except KeyboardInterrupt:
-            # Treat keyboard interrupt as a denial to keep semantics simple.
-            return False
-        result = result.lower().strip()
-        return result == "y"
+            await self.submit_event.wait()
+            self.submit_event.clear()
+            
+            last_input = self.input_buffer.history.get_strings()[-1] if self.input_buffer.history.get_strings() else ""
+            return last_input.strip().lower() == 'y'
+            
+        finally:
+            self.is_approving = False
+            self._invalidate()
 
-    # -- LoopCallbacks implementation -------------------------------------------------
-    def _update_live_display(self) -> None:
-        """Update the live display with current markdown and spinner."""
-        if self._live is not None:
-            from rich.console import Group
-            from rich.spinner import Spinner
-            from rich.styled import Styled
+    async def request_approval(self, req: ApprovalRequest) -> bool:
+        return await self.ask_approval(req.tool_name, req.tool_call_id, req.params)
 
-            # Create the spinner with current text
-            spinner = Spinner("dots", text=Text(self._spinner_text, style="bold green"))
-
-            # Mixed renderable types (Markdown/Spinner) - give the list a
-            # broad type so static checkers are satisfied.
-            items: list[Any] = []
-            if self._accumulated_thinking:
-                items.append(Styled(Markdown(self._accumulated_thinking), "italic dim"))
-
-            # If we have content, show it above the spinner
-            if self._accumulated_text:
-                items.append(Styled(Markdown(self._accumulated_text), "dim"))
-
-            items.append(spinner)
-
-            renderable = Group(*items)
-
-            self._live.update(renderable)
+    # -- LoopCallbacks implementation -----------------------------------------
 
     def on_thinking(self) -> None:
-        """Called when the agent starts thinking. Display initial status."""
-        self._spinner_text = DEFAULT_THINKING_TEXT
-        self._update_live_display()
+        """Called when the agent starts thinking."""
+        index = len(self.thinking_panes) + 1
+        pane = ThinkingPane(index)
+        self.thinking_panes.append(pane)
+        self.current_thinking_pane = pane
+        self.hsplit.children.append(pane.container)
+        self._auto_scroll()
+        self._invalidate()
 
     def on_thinking_chunk(self, chunk: str) -> None:
         """Accumulate streamed thinking text."""
-        self._accumulated_thinking += chunk
-        self._update_live_display()
+        if self.current_thinking_pane:
+            self.current_thinking_pane.textarea.text += chunk
+            _update_textarea_height(self.current_thinking_pane.textarea)
+            self._auto_scroll()
+            self._invalidate()
 
     def on_stream_chunk(self, chunk: StreamChunk) -> None:
-        """Accumulate streamed text for later rendering."""
-        self._accumulated_text += chunk.text
-        self._update_live_display()
+        """Accumulate streamed text."""
+        if not self.current_response_area:
+            self.current_response_area = _display_only_text_area()
+            self.hsplit.children.append(_to_container(self.current_response_area))
+        
+        self.current_response_area.text += chunk.text
+        _update_textarea_height(self.current_response_area)
+        self._auto_scroll()
+        self._invalidate()
 
     def on_stream_complete(self) -> None:
-        """Render accumulated markdown once streaming is complete."""
-        # When complete, we want to stop the Live display (which clears the transient parts)
-        # and print the final markdown permanently.
-        if self._live is not None:
-            self._live.stop()
-
-        if self._accumulated_thinking:
-            self.console.print(Text("Thinking:", style="italic dim"))
-            self.console.print(Markdown(self._accumulated_thinking), style="italic dim")
-            self.console.print()
-
-        if self._accumulated_text:
-            self.console.print(Markdown(self._accumulated_text))
-
-        self._accumulated_text = ""
-        self._accumulated_thinking = ""
-        self._spinner_text = DEFAULT_THINKING_TEXT
+        """Finished streaming."""
+        self.current_response_area = None
+        self._auto_scroll()
+        self._invalidate()
 
     def on_status_update(self, status: str) -> None:
-        """Called for ad-hoc status updates (e.g., char counts)."""
-        self._spinner_text = f"{DEFAULT_RESPONDING_BASE} {status}"
-        self._update_live_display()
+        # We could show this in a status bar or ephemeral text
+        pass
 
     def on_cancelled(self, message: str) -> None:
-        """Show cancelled message to the user."""
-        if self._live is not None:
-            self._live.stop()
-        self.console.print(Text(message, style="bold red"))
+        self.show_info(f"Cancelled: {message}")
 
-    async def request_approval(self, req: ApprovalRequest) -> bool:
-        """Adapter to ask_approval for LoopCallbacks."""
-        # We need to stop the live display before asking for input,
-        # otherwise the prompt will interfere with the live render.
-        if self._live is not None:
-            self._live.stop()
+    def _invalidate(self) -> None:
+        if self.invalidator:
+            self.invalidator.request()
 
-        with self._suspend_keyboard_capture():
-            try:
-                return await self.ask_approval(
-                    req.tool_name, req.tool_call_id, req.params
-                )
-            finally:
-                # Restart live display if we're still in the loop (though typically approval happens between turns)
-                if self._live is not None:
-                    self._live.start()
+    def _auto_scroll(self) -> None:
+        if self.scroll_controller:
+            self.scroll_controller.request_follow()
 
-    async def run_agent_interaction(
-        self,
-        agent: Agent[Any, str | DeferredToolRequests],
-        user_input: str,
-        conversation: list[ModelMessage],
-        run_deps: Any,
-    ) -> list[ModelMessage]:
-        """Run the agent interaction loop and return updated conversation."""
-        runner = AgentRunner(
-            agent,
-            user_input,
-            conversation,
-            run_deps,
-            callbacks=self,
+    async def run(self, input_handler: Callable[[str], Awaitable[None]]) -> None:
+        """Run the UI application."""
+        self.input_handler = input_handler
+        self.loop = asyncio.get_running_loop()
+        layout = self._create_layout()
+        kb = self._create_key_bindings()
+        
+        self.app = Application(
+            layout=layout,
+            key_bindings=kb,
+            full_screen=True,
+            style=APP_STYLE,
+            mouse_support=True,
+        )
+        
+        self.invalidator = ThrottledInvalidator(self.app.invalidate, 0.05, self.loop)
+        self.scroll_controller = ScrollController(
+            self._scrollable_pane_ref, self.invalidator.request
         )
 
-        # Interaction context (Live display + keyboard input) is handled here
-        input_source = create_input()
-        self._input_source = input_source
-
-        # Initialize state
-        self._spinner_text = DEFAULT_THINKING_TEXT
-        self._accumulated_text = ""
-        self._accumulated_thinking = ""
-
-        from rich.spinner import Spinner
-
-        initial_renderable = Spinner(
-            "dots", text=Text(self._spinner_text, style="bold green")
-        )
-
-        with Live(
-            renderable=initial_renderable,
-            console=self.console,
-            vertical_overflow="visible",
-            refresh_per_second=1,
-            transient=True,  # Clear the live display when done (we print final result manually).
-        ) as live:
-            self._live = live
-
-            with input_source.raw_mode():
-                # Attach keyboard input handler for pause/resume/cancel
-                def _handle_keyboard_input() -> None:
-                    for key_press in input_source.read_keys():
-                        if key_press.key == " ":
-                            if runner.is_paused:
-                                runner.resume()
-                            else:
-                                runner.pause()
-                        elif key_press.key == Keys.ControlC:
-                            runner.cancel()
-
-                with input_source.attach(_handle_keyboard_input):
-                    try:
-                        return await runner.run()
-                    finally:
-                        self._live = None
-                        self._input_source = None
+        await self.app.run_async()

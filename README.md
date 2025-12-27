@@ -2,6 +2,8 @@
 
 A code editing assistant powered by [Pydantic AI](https://ai.pydantic.dev/), supporting multiple LLM providers and delegatable sub-agents. Agent C provides tools for reading, editing, creating, and searching files with built-in backup and restoration capabilities.
 
+The `agentc_next` package represents the next-generation architecture with an event-driven, decoupled design featuring a Textual TUI.
+
 Hugely inspired by [How to Build an Agent](https://ampcode.com/how-to-build-an-agent) by Thorsten Ball of [AmpCode](https://ampcode.com/).
 
 ## Features

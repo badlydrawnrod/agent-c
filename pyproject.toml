@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "prompt-toolkit>=3.0.52",
     "pydantic-ai>=1.6.0",
+    "textual>=6.7.0",
 ]
 license = "MIT"
 
@@ -19,7 +20,15 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "agentc"
-source-include = ["agentc/*.py", "agentc/*.toml", "agentc/prompts/*.md", "agentc/ui/*.py"]
+source-include = [
+    "agentc/*.py",
+    "agentc/*.toml",
+    "agentc/prompts/*.md",
+    "agentc/ui/*.py",
+    "agentc_next/*.py",
+]
 
 [project.scripts]
 agent-c = "agentc.agent:main"
+run-console = "agentc_next.ui.run_console:main"
+run-textual = "agentc_next.ui.run_textual:main"

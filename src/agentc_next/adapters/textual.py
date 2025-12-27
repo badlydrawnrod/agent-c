@@ -1,0 +1,110 @@
+"""Adapter bridging the agentic event stream to Textual messages.
+
+Applies optional debouncing, translates agnostic events into
+`textual.message.Message` subclasses, and manages tool approval
+handshakes required by the UI.
+"""
+
+import asyncio
+
+from textual.app import App
+
+from ..core.types import (
+    AgentChunk,
+    AgentDone as AgentDoneEvent,
+    AgentSessionProtocol,
+    ApprovalRequest,
+    ApprovalResponse,
+    RunDeps,
+    ToolCallInfo,
+)
+from ..middleware.debouncing import DebouncingMiddleware
+from .textual_messages import (
+    AgentApprovalRequestMessage,
+    AgentCancelledMessage,
+    AgentDoneMessage,
+    AgentErrorMessage,
+    AgentThinkingMessage,
+    AgentTextMessage,
+    AgentToolCallMessage,
+)
+
+
+class TextualAgentAdapter:
+    """Adapts the agentic event stream to Textual Messages."""
+
+    def __init__(
+        self,
+        app: App,
+        session: AgentSessionProtocol,
+        prompt: str,
+        cancellation_event: asyncio.Event | None = None,
+        debounce_threshold: int = 40,
+    ):
+        self._app = app
+        self._session = session
+        self._prompt = prompt
+        self._cancellation_event = cancellation_event
+        self._debounce_threshold = debounce_threshold
+
+    def _is_cancelled(self) -> bool:
+        if isinstance(self._cancellation_event, asyncio.Event):
+            return self._cancellation_event.is_set()
+        return bool(self._cancellation_event)
+
+    async def run(self) -> None:
+        try:
+            # Note: session is expected to adhere to AgentSessionProtocol.
+            raw_events = self._session.run(
+                prompt=self._prompt,
+                deps=RunDeps(),
+                cancellation_event=self._cancellation_event,
+            )
+
+            middleware = DebouncingMiddleware(threshold=self._debounce_threshold)
+            events = middleware.process(raw_events)
+
+            response: ApprovalResponse | None = None
+
+            while True:
+                if self._is_cancelled():
+                    self._app.post_message(AgentCancelledMessage())
+                    return
+
+                try:
+                    event = await events.asend(response)
+                    response = None
+
+                    if isinstance(event, AgentChunk):
+                        if event.is_thought:
+                            self._app.post_message(AgentThinkingMessage(event.content))
+                        else:
+                            self._app.post_message(AgentTextMessage(event.content))
+
+                    elif isinstance(event, ToolCallInfo):
+                        # ToolCallInfo is now yielded directly for non-approval calls if any,
+                        # or mapped from PartStartEvent in the loop helper.
+                        self._app.post_message(
+                            AgentToolCallMessage(event.tool_call_id, event.tool_name, event.args)
+                        )
+
+                    elif isinstance(event, ApprovalRequest):
+                        response = await self._handle_approval_request(event)
+
+                    elif isinstance(event, AgentDoneEvent):
+                        self._app.post_message(AgentDoneMessage(event.history))
+                        break
+
+                except StopAsyncIteration:
+                    break
+
+        except Exception as exc:  # noqa: BLE001
+            self._app.post_message(AgentErrorMessage(str(exc)))
+
+    async def _handle_approval_request(
+        self, request: ApprovalRequest
+    ) -> ApprovalResponse:
+        future: asyncio.Future[tuple[bool, str | None]] = asyncio.Future()
+        self._app.post_message(AgentApprovalRequestMessage(request.tool_calls, future))
+        approved, reason = await future
+        return ApprovalResponse(approved=approved, reason=reason)

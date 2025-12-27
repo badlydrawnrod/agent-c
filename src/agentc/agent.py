@@ -45,28 +45,27 @@ async def _async_main() -> None:
     # Create command handler once for all command parsing
     command_handler = CommandHandler(personalities)
 
-    while True:
-        user_input = await ui.get_user_input()
-        if user_input is None:
-            ui.console.print("\nGoodbye!")
-            break
+    async def handle_input(user_input: str) -> None:
+        nonlocal conversation, agent, current_personality, agent_factory, run_deps
 
         # Parse command using centralized handler
         result = command_handler.parse(user_input)
 
         # Handle different command types
         if result.command_type == CommandType.EXIT:
-            break
+            if ui.app:
+                ui.app.exit()
+            return
 
         if result.command_type == CommandType.UNKNOWN:
             error_msg = result.args.get("error", "Unknown error")
-            ui.console.print(f"Error: {error_msg}")
-            continue
+            ui.show_info(f"Error: {error_msg}")
+            return
 
         if result.command_type == CommandType.CLEAR:
             conversation = []
-            ui.console.print("Context cleared.")
-            continue
+            ui.show_info("Context cleared.")
+            return
 
         if result.command_type == CommandType.PERSONALITY_SWITCH:
             new_personality = result.args["personality"]
@@ -80,17 +79,36 @@ async def _async_main() -> None:
             run_deps.agent_factory = agent_factory
             current_personality = new_personality
             conversation = []
-            ui.console.print(f"Switched to personality: {new_personality}")
-            continue
+            ui.show_info(f"Switched to personality: {new_personality}")
+            return
 
         # Regular input - run agent interaction
         if result.command_type == CommandType.NORMAL_INPUT:
             try:
-                conversation = await ui.run_agent_interaction(
-                    agent, user_input, conversation, run_deps
+                # Display the user prompt in the UI
+                from agentc.ui.console import _to_container, _user_prompt_area
+                from prompt_toolkit.widgets import Frame
+                
+                area = _user_prompt_area(user_input)
+                frame = Frame(area, title="You")
+                ui.hsplit.children.append(_to_container(frame))
+                
+                # Now run the agent
+                from agentc.core.runner import AgentRunner
+                runner = AgentRunner(
+                    agent,
+                    user_input,
+                    conversation,
+                    run_deps,
+                    callbacks=ui,
                 )
+                
+                conversation[:] = await runner.run()
+                
             except Exception as e:
-                ui.console.print(f"Error: {e}")
+                ui.show_info(f"Error: {e}")
+
+    await ui.run(handle_input)
 
 
 def main() -> None:
