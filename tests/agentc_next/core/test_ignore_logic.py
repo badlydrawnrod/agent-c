@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from agentc_next.core.tools import glob_paths, search_files
 
 @pytest.fixture

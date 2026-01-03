@@ -7,7 +7,7 @@ You must preserve the repo's layered, strongly-typed architecture.
   - `types.py`: Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done), `AgentSessionProtocol`, and shared dataclasses.
   - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs). Must be UI-agnostic.
   - `loop.py`: `AgentSession` implementing the bidirectional async generator loop and mapping pydantic_ai events to `AgentEvent`.
-  - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` with Ollama (`gpt-oss:20b`), toolset, and skills table.
+  - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the provider and model configured in `providers.toml` (the repo default is `ollama`), plus the shared toolset and skills table.
   - `tool_parsing.py`: Robust JSON/dict argument handling for tool calls.
   - `tools.py`: Concrete tool implementations (`list_files`, `glob_paths`, `search_files`, `read_file`, `edit_file`, `run_command`).
   - `skill_loader.py`: Discovers `SKILL.md` skills under configured directories and renders a skills table for the system prompt.
@@ -29,7 +29,7 @@ You must preserve the repo's layered, strongly-typed architecture.
 - Debouncing: `DebouncingMiddleware` buffers short text/thinking deltas but lets tool calls, tool results, approvals, and completion events pass through immediately.
 - Tools: All file ops are confined to the working tree, `read_file` emits `cat -n` formatting, `edit_file` enforces a single match and writes atomically with `.bak` backups, and `run_command` plus `edit_file` require approval. `glob_paths` and `search_files` respect combined ignore patterns (defaults like `.git/` plus `.gitignore`).
 - Skills: `SkillLoader` scans `.github/skills` and `.claude/skills` by default and injects a skills table plus usage guidance into the system prompt.
-- Model defaults: `create_agent` uses `OpenAIChatModel` with `OllamaProvider` (`gpt-oss:20b`, `http://localhost:11434/v1`).
+-- Model defaults: provider and model are loaded from `src/agentc_next/providers.toml` via `provider_loader.load_providers()` and `provider_loader.build_model()`; the repo default provider is `ollama` (see `core/config.py`), which maps to an Ollama-backed model in `providers.toml` (for example `gpt-oss:120b-cloud` at `http://localhost:11434/v1`).
 
 ### Rules (strict)
 - **Layers**: types (core) / loop / middleware / adapter / UI. State the layer(s) you change **before** modifying code.

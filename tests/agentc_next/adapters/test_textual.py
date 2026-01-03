@@ -8,7 +8,6 @@ from agentc_next.core.types import (
     AgentDone as AgentDoneEvent,
     AgentSessionProtocol,
     ApprovalRequest,
-    ToolCallInfo,
     ToolCallResultInfo,
     ToolResult,
 )
@@ -16,7 +15,6 @@ from agentc_next.adapters.textual_messages import (
     AgentTextMessage,
     AgentDoneMessage,
     AgentApprovalRequestMessage,
-    AgentToolCallMessage,
     AgentToolResultMessage,
 )
 

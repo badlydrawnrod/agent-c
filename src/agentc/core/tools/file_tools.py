@@ -1,4 +1,3 @@
-import re
 
 from pydantic_ai import ModelRetry, RunContext
 

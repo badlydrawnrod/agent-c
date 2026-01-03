@@ -14,7 +14,14 @@ from pydantic_ai import (
 
 from pathlib import Path
 from .config import DEFAULT_SKILL_DIRS, DEFAULT_PROVIDER
-from .tools import list_files, glob_paths, search_files, read_file, edit_file, run_command
+from .tools import (
+    list_files,
+    glob_paths,
+    search_files,
+    read_file,
+    edit_file,
+    run_command,
+)
 from .skill_loader import SkillLoader
 from .types import RunDeps, NextAgent
 from .provider_loader import load_providers, build_model
@@ -35,7 +42,6 @@ def create_agent(
         )
 
     _, model = build_model(providers[name])
-
 
     tools: list[Tool[RunDeps]] = [
         Tool(list_files, takes_ctx=True),

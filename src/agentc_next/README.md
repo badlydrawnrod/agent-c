@@ -3,7 +3,7 @@
 Layered, event-driven implementation of AgentC that keeps agent logic, middleware, adapters, and UIs decoupled while sharing a common toolset and skills library.
 
 ## What lives here
-- **`core/`**: `AgentSession` wraps the `pydantic_ai` agent and maps streaming events into agnostic `AgentEvent` types (`AgentChunk`, `ToolCallInfo`, `ToolCallResultInfo`, `ApprovalRequest`, `AgentDone`). `factory.py` builds the agent with tools, skill discovery, and the Ollama-backed model (`gpt-oss:20b` at `http://localhost:11434/v1`). `tool_parsing.py` normalizes tool args; `skill_loader.py` discovers `SKILL.md` skills; `config.py` centralizes limits and suffixes.
+- **`core/`**: `AgentSession` wraps the `pydantic_ai` agent and maps streaming events into agnostic `AgentEvent` types (`AgentChunk`, `ToolCallInfo`, `ToolCallResultInfo`, `ApprovalRequest`, `AgentDone`). `factory.py` builds the agent with tools, skill discovery, and loads the provider/model configured in `providers.toml` (repo default: `ollama`). `tool_parsing.py` normalizes tool args; `skill_loader.py` discovers `SKILL.md` skills; `config.py` centralizes limits and suffixes.
 - **`middleware/`**: `DebouncingMiddleware` buffers short text/thinking deltas while passing tool calls, approvals, and results through untouched.
 - **`adapters/`**: Translate `AgentEvent` into UI-specific messages. `textual.py` posts Textual `Message` subclasses; `console.py` dispatches callback-based console events. Each preserves the async approval handshake.
 - **`ui/`**: Entry points and UI code. `run_textual.py` launches `TextualAgentApp`; `run_console.py` demonstrates the console adapter with a sample prompt and auto-approval flow.
@@ -24,8 +24,8 @@ Layered, event-driven implementation of AgentC that keeps agent logic, middlewar
 ## Skills library
 `SkillLoader` scans `.github/skills` and `.claude/skills` (configurable) for `SKILL.md` descriptors. `create_agent` injects a table of discovered skills into the system prompt, with guidance to `cd` into the skill base directory before running documented commands.
 
-## Defaults and configuration
-- Model: `OpenAIChatModel` with `OllamaProvider`, model `gpt-oss:20b`, base URL `http://localhost:11434/v1`.
+-## Defaults and configuration
+- Model and provider: The provider and model are driven by `src/agentc_next/providers.toml`; the repository default provider is `ollama` (see `core/config.py`), which in `providers.toml` maps to an Ollama-backed `OpenAIChatModel` instance (for example `gpt-oss:120b-cloud` at `http://localhost:11434/v1`).
 - Config: `MAX_TOOL_OUTPUT_LINES=200`, `BACKUP_SUFFIX=.bak`, `TEMP_SUFFIX=.tmp`, default skill dirs `.github/skills` and `.claude/skills`.
 - Default ignore patterns: `.git/`, `__pycache__/`, `*.pyc`, `.venv/`, `node_modules/`, `.DS_Store`.
 - System prompt encourages succinct, ASCII-first responses and leans on the skills table for specialized workflows.
