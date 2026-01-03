@@ -264,6 +264,28 @@ def edit_file(ctx: RunContext[RunDeps], path: str, old_str: str, new_str: str) -
         return ToolResult(success=False, content="", error=f"{e}. Backup saved to {backup_path.name}")
 
 
+def create_file(ctx: RunContext[RunDeps], path: str, content: str) -> ToolResult:
+    """Create a new file with the given content.
+
+    - Path must be inside currently working directory.
+    - Path must NOT exist (use edit_file to modify existing files).
+    - Creates parent directories if needed.
+    - Writes atomically via a temp file.
+    """
+    try:
+        target = _resolve_path(path, must_exist=False)
+        if target.exists():
+            raise ModelRetry(f"File already exists: {path}. Use edit_file to modify it.")
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _write_text_atomic(target, content)
+        return ToolResult(success=True, content="File created successfully")
+    except ModelRetry:
+        raise
+    except Exception as e:
+        return ToolResult(success=False, content="", error=str(e))
+
+
 async def run_command(ctx: RunContext[RunDeps], command: str) -> ToolResult:
     """Run a shell command asynchronously and return combined stdout+stderr.
 

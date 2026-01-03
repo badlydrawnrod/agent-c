@@ -20,6 +20,7 @@ from .tools import (
     search_files,
     read_file,
     edit_file,
+    create_file,
     run_command,
 )
 from .skill_loader import SkillLoader
@@ -48,6 +49,7 @@ def create_agent(
         Tool(glob_paths, takes_ctx=True),
         Tool(search_files, takes_ctx=True),
         Tool(read_file, takes_ctx=True),
+        Tool(create_file, takes_ctx=True, requires_approval=True),
         Tool(edit_file, takes_ctx=True, requires_approval=True),
         Tool(run_command, takes_ctx=True, requires_approval=True),
     ]
