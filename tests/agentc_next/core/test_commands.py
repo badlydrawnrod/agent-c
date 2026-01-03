@@ -1,6 +1,6 @@
 import pytest
-from agentc_next.core.commands import CommandParser
-from agentc_next.core.types import CommandType, ProviderConfig
+from agentc_next.core.commands import CommandParser, execute_command
+from agentc_next.core.types import CommandResult, CommandType, ProviderConfig
 
 @pytest.fixture
 def mock_providers():
@@ -64,3 +64,54 @@ def test_parse_case_insensitivity(parser):
     result = parser.parse("/PROVIDER Anthropic")
     assert result.command_type == CommandType.PROVIDER_SWITCH
     assert result.args["provider"] == "anthropic"
+
+
+# --- Tests for execute_command ---
+
+
+class TestExecuteCommand:
+    """Tests for the execute_command function."""
+
+    def test_execute_clear_returns_effect(self):
+        """CLEAR command should return effect with new session and notification."""
+        result = CommandResult(CommandType.CLEAR, {})
+        effect = execute_command(result)
+
+        assert effect is not None
+        assert effect.new_session is not None
+        assert effect.notification == "Conversation cleared"
+        assert effect.should_reset_ui is True
+
+    def test_execute_provider_switch_returns_effect(self):
+        """PROVIDER_SWITCH command should return effect with new session."""
+        result = CommandResult(CommandType.PROVIDER_SWITCH, {"provider": "anthropic"})
+        effect = execute_command(result)
+
+        assert effect is not None
+        assert effect.new_session is not None
+        assert effect.notification == "Switched to provider: anthropic"
+        assert effect.should_reset_ui is True
+
+    def test_execute_exit_returns_none(self):
+        """EXIT command should return None (handled by UI)."""
+        result = CommandResult(CommandType.EXIT, {})
+        effect = execute_command(result)
+
+        assert effect is None
+
+    def test_execute_unknown_returns_none(self):
+        """UNKNOWN command should return None (handled by UI)."""
+        result = CommandResult(
+            CommandType.UNKNOWN,
+            {"input": "/invalid", "error": "Unknown command"},
+        )
+        effect = execute_command(result)
+
+        assert effect is None
+
+    def test_execute_normal_input_returns_none(self):
+        """NORMAL_INPUT should return None (not a command)."""
+        result = CommandResult(CommandType.NORMAL_INPUT, {})
+        effect = execute_command(result)
+
+        assert effect is None

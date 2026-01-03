@@ -4,10 +4,11 @@ You must preserve the repo's layered, strongly-typed architecture.
 
 ### Package Structure (`src/agentc_next/`)
 - **`core/`**: Agnostic logic.
-  - `types.py`: Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done), `AgentSessionProtocol`, and shared dataclasses.
+  - `types.py`: Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done), `AgentSessionProtocol`, and shared dataclasses. Also defines `CommandEffect` for effect-based command execution.
   - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs). Must be UI-agnostic.
   - `loop.py`: `AgentSession` implementing the bidirectional async generator loop and mapping pydantic_ai events to `AgentEvent`.
   - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the provider and model configured in `providers.toml` (the repo default is `ollama`), plus the shared toolset and skills table.
+  - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`). Commands produce pure `CommandEffect` data; UIs apply effects.
   - `tool_parsing.py`: Robust JSON/dict argument handling for tool calls.
   - `tools.py`: Concrete tool implementations (`list_files`, `glob_paths`, `search_files`, `read_file`, `edit_file`, `run_command`).
   - `skill_loader.py`: Discovers `SKILL.md` skills under configured directories and renders a skills table for the system prompt.
@@ -27,9 +28,10 @@ You must preserve the repo's layered, strongly-typed architecture.
 ### Current implementation snapshot
 - Event flow: `AgentSession.run()` streams pydantic_ai parts, maps them to `AgentEvent`, and supports tool call results alongside tool call announcements.
 - Debouncing: `DebouncingMiddleware` buffers short text/thinking deltas but lets tool calls, tool results, approvals, and completion events pass through immediately.
+- Command execution: Effect-based pattern separates command logic from UI. `CommandParser.parse()` returns `CommandResult`; `execute_command()` produces `CommandEffect` (pure data); UI layer applies effects. Commands like `/clear` and `/provider <name>` are handled generically; framework-specific commands (`/exit`, unknown commands) are handled directly by the UI.
 - Tools: All file ops are confined to the working tree, `read_file` emits `cat -n` formatting, `edit_file` enforces a single match and writes atomically with `.bak` backups, and `run_command` plus `edit_file` require approval. `glob_paths` and `search_files` respect combined ignore patterns (defaults like `.git/` plus `.gitignore`).
 - Skills: `SkillLoader` scans `.github/skills` and `.claude/skills` by default and injects a skills table plus usage guidance into the system prompt.
--- Model defaults: provider and model are loaded from `src/agentc_next/providers.toml` via `provider_loader.load_providers()` and `provider_loader.build_model()`; the repo default provider is `ollama` (see `core/config.py`), which maps to an Ollama-backed model in `providers.toml` (for example `gpt-oss:120b-cloud` at `http://localhost:11434/v1`).
+- Model defaults: provider and model are loaded from `src/agentc_next/providers.toml` via `provider_loader.load_providers()` and `provider_loader.build_model()`; the repo default provider is `ollama` (see `core/config.py`), which maps to an Ollama-backed model in `providers.toml` (for example `gpt-oss:120b-cloud` at `http://localhost:11434/v1`).
 
 ### Rules (strict)
 - **Layers**: types (core) / loop / middleware / adapter / UI. State the layer(s) you change **before** modifying code.
@@ -39,6 +41,7 @@ You must preserve the repo's layered, strongly-typed architecture.
 - **Tests (Mandatory)**: Maintain and update the test suite in `tests/agentc_next/`. Covering:
   - `core.loop`: `test_loop.py` (handshake, history, tool call yielding).
   - `core.factory`: `test_factory.py` (agent creation).
+  - `core.commands`: `test_commands.py` (command parsing and effect-based execution).
   - `core.tool_parsing`: `test_tool_parsing.py` (JSON argument handling).
   - `core.tools`: `test_tools.py` and `test_tool_result.py` (file operations, glob/search, safety constraints, tool result mapping).
   - `core.skill_loader`: `test_skill_loader.py` (skill discovery and skills table rendering).

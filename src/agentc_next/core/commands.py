@@ -1,12 +1,19 @@
 """
-Command parsing for Agent C Next.
+Command parsing and execution for Agent C Next.
 
 This module centralizes command semantics, ensuring consistent behavior
 across all UIs. It provides a single source of truth for what commands
 exist and what they do.
+
+The module follows an effect-based pattern:
+- CommandParser: Parses user input into structured CommandResult
+- execute_command: Produces CommandEffect from CommandResult (pure function)
+- UI layer: Applies the effects (framework-specific)
 """
 
-from .types import CommandResult, CommandType, ProviderConfig
+from .factory import create_agent
+from .loop import AgentSession
+from .types import CommandEffect, CommandResult, CommandType, ProviderConfig
 
 
 class CommandParser:
@@ -83,3 +90,42 @@ class CommandParser:
 
         # Regular input (not a command)
         return CommandResult(CommandType.NORMAL_INPUT, {})
+
+
+def execute_command(
+    result: CommandResult,
+    provider_name: str | None = None,
+) -> CommandEffect | None:
+    """Execute a command and return its effect.
+
+    This is a pure function that takes a parsed command and returns
+    the effect that should be applied by the UI. Commands that require
+    framework-specific handling (EXIT, UNKNOWN, NORMAL_INPUT) return None.
+
+    Args:
+        result: The parsed command result from CommandParser.
+        provider_name: Optional provider name for PROVIDER_SWITCH command.
+
+    Returns:
+        CommandEffect describing what should happen, or None if the
+        command should be handled directly by the UI layer.
+    """
+    match result.command_type:
+        case CommandType.CLEAR:
+            return CommandEffect(
+                new_session=AgentSession(agent=create_agent()),
+                notification="Conversation cleared",
+                should_reset_ui=True,
+            )
+
+        case CommandType.PROVIDER_SWITCH:
+            provider = result.args.get("provider", provider_name)
+            return CommandEffect(
+                new_session=AgentSession(agent=create_agent(provider_name=provider)),
+                notification=f"Switched to provider: {provider}",
+                should_reset_ui=True,
+            )
+
+        case _:
+            # EXIT, UNKNOWN, NORMAL_INPUT are handled by the UI layer
+            return None

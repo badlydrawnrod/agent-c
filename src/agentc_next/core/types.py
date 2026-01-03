@@ -46,6 +46,26 @@ class CommandResult:
 
 
 @dataclass
+class CommandEffect:
+    """Effect produced by executing a command.
+
+    This dataclass represents the pure data outcome of a command execution.
+    The UI layer is responsible for interpreting and applying these effects.
+    Commands like EXIT and UNKNOWN are handled directly by the UI since they
+    require framework-specific actions.
+
+    Attributes:
+        new_session: A new agent session to replace the current one, or None.
+        notification: A message to display to the user, or None.
+        should_reset_ui: Whether the UI should clear its state.
+    """
+
+    new_session: AgentSessionProtocol | None = None
+    notification: str | None = None
+    should_reset_ui: bool = False
+
+
+@dataclass
 class SkillMetadata:
     """Metadata for an agent skill."""
 

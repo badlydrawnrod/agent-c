@@ -33,9 +33,7 @@ from ..adapters.textual_messages import (
     AgentToolResultMessage,
 )
 from ..adapters.textual import TextualAgentAdapter
-from ..core.commands import CommandParser
-from ..core.factory import create_agent
-from ..core.loop import AgentSession
+from ..core.commands import CommandParser, execute_command
 from ..core.provider_loader import load_providers
 from ..core.types import AgentSessionProtocol, CommandType
 
@@ -134,27 +132,25 @@ class TextualAgentApp(App):
         # Parse command.
         result = self.command_parser.parse(user_text)
 
+        # Handle framework-specific commands directly.
         if result.command_type == CommandType.EXIT:
             self.exit()
             return
 
-        if result.command_type == CommandType.CLEAR:
-            input_widget.clear()
-            await self._reset_ui_state()
-            self._session = AgentSession(agent=create_agent())
-            self.notify("Conversation cleared")
-            return
-
-        if result.command_type == CommandType.PROVIDER_SWITCH:
-            provider = result.args["provider"]
-            input_widget.clear()
-            await self._reset_ui_state()
-            self._session = AgentSession(agent=create_agent(provider_name=provider))
-            self.notify(f"Switched to provider: {provider}")
-            return
-
         if result.command_type == CommandType.UNKNOWN:
             self.notify(result.args["error"], severity="error")
+            return
+
+        # Execute command and apply effect.
+        effect = execute_command(result)
+        if effect is not None:
+            input_widget.clear()
+            if effect.should_reset_ui:
+                await self._reset_ui_state()
+            if effect.new_session is not None:
+                self._session = effect.new_session
+            if effect.notification:
+                self.notify(effect.notification)
             return
 
         # Normal input.
