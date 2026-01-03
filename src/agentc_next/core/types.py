@@ -15,6 +15,18 @@ from pydantic_ai import Agent, DeferredToolRequests
 
 
 @dataclass
+class ProviderConfig:
+    """Configuration for a provider loaded from TOML."""
+
+    name: str
+    provider_cls_path: str  # e.g., "pydantic_ai.providers.anthropic.AnthropicProvider"
+    model_cls_path: str  # e.g., "pydantic_ai.models.anthropic.AnthropicModel"
+    model_name: str
+    api_key_env: str | None = None
+    base_url: str | None = None
+
+
+@dataclass
 class SkillMetadata:
     """Metadata for an agent skill."""
 

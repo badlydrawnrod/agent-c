@@ -25,3 +25,5 @@ DEFAULT_IGNORE_PATTERNS: list[str] = [
     "node_modules/",
     ".DS_Store",
 ]
+# Default provider from providers.toml
+DEFAULT_PROVIDER: str = "ollama"

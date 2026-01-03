@@ -12,25 +12,30 @@ from pydantic_ai import (
     Tool,
 )
 
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.ollama import OllamaProvider
-
 from pathlib import Path
-from .config import DEFAULT_SKILL_DIRS
+from .config import DEFAULT_SKILL_DIRS, DEFAULT_PROVIDER
 from .tools import list_files, glob_paths, search_files, read_file, edit_file, run_command
 from .skill_loader import SkillLoader
 from .types import RunDeps, NextAgent
+from .provider_loader import load_providers, build_model
 
 
-def create_agent(skill_dirs: list[Path] | None = None) -> NextAgent:
+def create_agent(
+    skill_dirs: list[Path] | None = None, provider_name: str | None = None
+) -> NextAgent:
     """Factory function to create a configured agent instance."""
     if skill_dirs is None:
         skill_dirs = [Path(p) for p in DEFAULT_SKILL_DIRS]
 
-    model = OpenAIChatModel(
-        provider=OllamaProvider(base_url="http://localhost:11434/v1"),
-        model_name="gpt-oss:20b",
-    )
+    providers = load_providers()
+    name = provider_name or DEFAULT_PROVIDER
+    if name not in providers:
+        raise ValueError(
+            f"Unknown provider: {name}. Available providers: {list(providers.keys())}"
+        )
+
+    _, model = build_model(providers[name])
+
 
     tools: list[Tool[RunDeps]] = [
         Tool(list_files, takes_ctx=True),
