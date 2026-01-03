@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from asyncio import Event
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncGenerator, Protocol
 
@@ -24,6 +25,24 @@ class ProviderConfig:
     model_name: str
     api_key_env: str | None = None
     base_url: str | None = None
+
+
+class CommandType(Enum):
+    """Types of user commands."""
+
+    NORMAL_INPUT = "normal"  # Regular agent input (not a command)
+    CLEAR = "clear"  # Clear conversation context
+    EXIT = "exit"  # Exit application
+    PROVIDER_SWITCH = "switch"  # Switch to different provider
+    UNKNOWN = "unknown"  # Unknown command (error)
+
+
+@dataclass
+class CommandResult:
+    """Result of parsing a user command."""
+
+    command_type: CommandType
+    args: dict[str, Any]
 
 
 @dataclass

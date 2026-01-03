@@ -33,7 +33,11 @@ from ..adapters.textual_messages import (
     AgentToolResultMessage,
 )
 from ..adapters.textual import TextualAgentAdapter
-from ..core.types import AgentSessionProtocol
+from ..core.commands import CommandParser
+from ..core.factory import create_agent
+from ..core.loop import AgentSession
+from ..core.provider_loader import load_providers
+from ..core.types import AgentSessionProtocol, CommandType
 
 
 class TextualAgentApp(App):
@@ -95,6 +99,17 @@ class TextualAgentApp(App):
         self._thinking_output: Static | None = None
         self._stream_writer: Any | None = None
         self._thinking_text = ""
+        self.command_parser = CommandParser(load_providers())
+
+    async def _reset_ui_state(self) -> None:
+        """Clear the scroll area and reset tracking variables."""
+        if self._scroll:
+            await self._scroll.query("*").remove()
+        self._thinking_text = ""
+        self._pending_tool_widgets.clear()
+        self._collapsible = None
+        self._thinking_output = None
+        self._stream_writer = None
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="scroll"):
@@ -109,13 +124,40 @@ class TextualAgentApp(App):
         yield input_widget
         yield Footer()
 
-    def action_submit_input(self) -> None:
+    async def action_submit_input(self) -> None:
         input_widget = self.query_one("#input", HistoryTextArea)
         user_text = input_widget.text.strip()
 
         if not user_text:
             return
 
+        # Parse command.
+        result = self.command_parser.parse(user_text)
+
+        if result.command_type == CommandType.EXIT:
+            self.exit()
+            return
+
+        if result.command_type == CommandType.CLEAR:
+            input_widget.clear()
+            await self._reset_ui_state()
+            self._session = AgentSession(agent=create_agent())
+            self.notify("Conversation cleared")
+            return
+
+        if result.command_type == CommandType.PROVIDER_SWITCH:
+            provider = result.args["provider"]
+            input_widget.clear()
+            await self._reset_ui_state()
+            self._session = AgentSession(agent=create_agent(provider_name=provider))
+            self.notify(f"Switched to provider: {provider}")
+            return
+
+        if result.command_type == CommandType.UNKNOWN:
+            self.notify(result.args["error"], severity="error")
+            return
+
+        # Normal input.
         input_widget.add_to_history(user_text)
         input_widget.clear()
         input_widget.focus()
