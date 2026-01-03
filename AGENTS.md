@@ -12,11 +12,11 @@
     ```powershell
     python -m venv .venv; .\venv\Scripts\Activate.ps1; uv sync
     ```
-- **Run legacy agent**: `uv run agent-c --personality coder`
-- **Install Textual UI**: `uv run run-textual`
-- **Install Console UI**: `uv run run-console`
+- **Run Agent C (Textual UI)**: `uv run agent-c`
+- **Run Console UI**: `uv run run-console`
+- **Run legacy agent**: `uv run agent-c-legacy --personality coder`
 - **Test all**: `uv run pytest`
-- **Test agentc_next only**: `uv run pytest tests/agentc_next/`
+- **Test agentc only**: `uv run pytest tests/core/ tests/middleware/ tests/adapters/`
 - **Type check**: `uv run mypy`
 - **Lint**: `uv run ruff check`
 - **Format**: `uv run ruff format`
@@ -25,32 +25,32 @@
 
 ```powershell
 uv sync
-uv run run-textual  # Launch the Textual UI
+uv run agent-c  # Launch the Textual UI
 ```
 
 ## Architecture Overview
 
-The project contains two main implementations:
+The project uses an event-driven, layered architecture:
 
-### Legacy Implementation (`src/agentc/`)
-Traditional monolithic agent with file operations, multiple personalities, and CLI interface.
-
-### Next-Generation Implementation (`src/agentc_next/`)
+### Main Implementation (`src/agentc/`)
 Event-driven, layered architecture with:
 - **`core/`**: Agnostic agentic logic (types, event loop, agent factory, tools). `tools.py` uses combined ignore patterns for discovery.
 - **`middleware/`**: Cross-cutting concerns (e.g., debouncing)
 - **`adapters/`**: Bridges core event stream to specific frameworks. Owns translation logic and UI-specific message types.
 - **`ui/`**: User interface implementations (Textual TUI, Console)
 
-## Code Style & Architecture Rules (agentc_next)
+### Legacy Implementation (`src/agentc_legacy/`) - DEPRECATED
+Traditional monolithic agent with file operations, multiple personalities, and CLI interface. Available via `agent-c-legacy` command but will be removed in a future release.
 
-When working on `agentc_next`, follow these rules strictly:
+## Code Style & Architecture Rules
+
+When working on `agentc`, follow these rules strictly:
 
 ### Layering & Dependencies
 - **Layer stack**: types (core) / loop / middleware / adapter / UI
 - State the layer(s) you change **before** modifying code
 - No cross-layer imports from `core` to `ui`
-- If data flows across layers, add a typed dataclass to `src/agentc_next/core/types.py`
+- If data flows across layers, add a typed dataclass to `src/agentc/core/types.py`
 
 ### Event-Driven Pattern
 - The run loop is a bidirectional async generator
@@ -72,7 +72,7 @@ When working on `agentc_next`, follow these rules strictly:
 - **Async**: Use `async`/`await` pattern for I/O operations
 
 ### Testing (Mandatory)
-Maintain and update the test suite in `tests/agentc_next/`. Must cover:
+Maintain and update the test suite in `tests/`. Must cover:
 - `core.loop`: approval handshake, history, and tool call yielding
 - `middleware.debouncing`: flush logic and delta aggregation
 - `adapters.textual`: mapping to `adapters.messages`
@@ -83,41 +83,42 @@ Maintain and update the test suite in `tests/agentc_next/`. Must cover:
 1. **Activate the venv** and run frequent checks:
    ```powershell
    .\venv\Scripts\Activate.ps1
-   uv run ruff check; uv run mypy; uv run pytest tests/agentc_next/
+   uv run ruff check; uv run mypy; uv run pytest tests/core/ tests/middleware/ tests/adapters/
    ```
 
 2. **Run a single test** for quick feedback:
    ```powershell
-   uv run pytest tests/agentc_next/core/test_loop.py::test_agent_session_history
+   uv run pytest tests/core/test_loop.py::test_agent_session_history
    ```
 
 3. **Before submitting changes**, verify:
    - [ ] `uv run ruff check` passes (no linting issues)
    - [ ] `uv run mypy` passes (no type errors)
-   - [ ] `uv run pytest tests/agentc_next/` passes (all tests green)
+   - [ ] `uv run pytest` passes (all tests green)
    - [ ] Updated tests for any new functionality
    - [ ] Updated docstrings for public APIs
 
 ## Configuration & Secrets
 
-- The `config.toml` files in `src/agentc/` and `src/agentc_next/` hold configuration overrides
+- The `providers.toml` file in `src/agentc/` holds provider configurations
 - Set provider credentials with environment variables or update local config files
 - Example: `export ANTHROPIC_API_KEY=your_key` (Linux/macOS) or `$env:ANTHROPIC_API_KEY = 'your_key'` (PowerShell)
 
 ## Code Review Checklist
 
-When contributing to `agentc_next`:
+When contributing to `agentc`:
 1. **Verify layering**: State which layers you modified
 2. **Check types**: All public functions fully annotated
 3. **Validate tests**: New tests cover changes, all existing tests pass
 4. **Ensure async patterns**: Proper use of `async`/`await` and `asend` for handshakes
 5. **Review imports**: No circular dependencies, respect layer boundaries
-6. **Run all checks**: `ruff check`, `mypy`, and `pytest tests/agentc_next/`
+6. **Run all checks**: `ruff check`, `mypy`, and `pytest`
 
 ## Build and Distribution
 
 - **Build system**: `uv_build`
 - **Entry points**:
-  - `agentc.agent:main` (legacy agent-c command)
-  - `agentc_next.ui.run_textual:main` (run-textual)
-  - `agentc_next.ui.run_console:main` (run-console)
+  - `agentc.ui.run_textual:main` (agent-c command - default Textual UI)
+  - `agentc.ui.run_console:main` (run-console command)
+  - `agentc.ui.run_textual:main` (run-textual command)
+  - `agentc_legacy.agent:main` (agent-c-legacy command - deprecated)

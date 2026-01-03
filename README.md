@@ -1,19 +1,17 @@
 # Agent C
 
-A code editing assistant powered by [Pydantic AI](https://ai.pydantic.dev/), supporting multiple LLM providers and delegatable sub-agents. Agent C provides tools for reading, editing, creating, and searching files with built-in backup and restoration capabilities.
-
-The `agentc_next` package represents the next-generation architecture with an event-driven, decoupled design featuring a Textual TUI.
+A modern code editing assistant powered by [Pydantic AI](https://ai.pydantic.dev/), featuring an event-driven architecture with skills-based prompting, multiple LLM provider support, and a rich Textual TUI.
 
 Hugely inspired by [How to Build an Agent](https://ampcode.com/how-to-build-an-agent) by Thorsten Ball of [AmpCode](https://ampcode.com/).
 
 ## Features
 
-- **Next-Gen TUI**: Modern, event-driven Textual interface with debounced streaming and approval workflows
+- **Event-Driven Architecture**: Layered design with core logic, middleware, adapters, and UI separation
+- **Skills-Based System**: Discoverable `SKILL.md` files from project and home directory
+- **Rich TUI**: Modern Textual interface with debounced streaming and approval workflows
 - **Multiple LLM Providers**: Support for Ollama, Anthropic Claude, OpenAI GPT, and others
-- **Configurable Personalities**: Pre-built coder, reviewer, and debugger personas with custom prompts
-- **File Management Tools**: Read, edit, create, list, and search files (with combined `.gitignore` support)
+- **File Management Tools**: Read, edit, create, list, and search files with combined `.gitignore` support
 - **Safe Editing**: Automatic backups before file modifications with rollback capability
-- **Agent Delegation**: Personalities can delegate tasks to other personalities
 - **Interactive CLI**: Rich terminal UI with conversation history and command support
 
 ## Prerequisites
@@ -59,11 +57,9 @@ uv sync
 
 ## Configuration
 
-Agent C uses three TOML configuration files (located in `src/agentc/`):
+Agent C uses a single TOML configuration file (located in `src/agentc/`):
 
-- **`providers.toml`**: Built-in list of supported LLM providers
-- **`personalities.toml`**: Define agent personalities with custom prompts and provider mappings
-- **`config.toml`**: Override default settings per provider (API keys, models, etc.)
+- **`providers.toml`**: Configure all supported LLM providers (Ollama, Anthropic, OpenAI, etc.)
 
 ### Setting API Keys
 
@@ -84,28 +80,23 @@ Ollama requires no API key but must be running locally.
 
 ## Running the Agent
 
-### Basic Usage
+### Basic Usage (Textual TUI)
 
 ```bash
-uv run agent-c --personality coder
+uv run agent-c
 ```
 
-### Available Personalities
-
-- `coder` (default): Assists with code development and editing
-- `reviewer`: Code review and analysis
-- `debugger`: Debugging and troubleshooting
-
-### Override the Model
+### Console UI
 
 ```bash
-uv run agent-c --personality reviewer --model gpt-4
+uv run run-console
 ```
 
 ### Override the Provider
 
-```bash
-uv run agent-c --personality coder --provider anthropic
+Use the `/provider` command within the agent:
+```
+/provider anthropic
 ```
 
 Available providers: `anthropic`, `google`, `huggingface`, `mistral`, `ollama`, `openai`
@@ -113,15 +104,23 @@ Available providers: `anthropic`, `google`, `huggingface`, `mistral`, `ollama`, 
 ### Run Without Installing
 
 ```bash
-uvx --from . agent-c --personality coder
+uvx --from . agent-c
 ```
 
 ### Interactive Commands
 
 While in the agent, type:
 - `/clear` or `/reset`: Clear conversation history
-- `/personality <name>`: Switch to a different personality
+- `/provider <name>`: Switch to a different provider
 - `/quit` or `/exit`: Exit the agent
+
+## Skills System
+
+Agent C uses a skills-based approach where skills are discovered from:
+- Project directory: `SKILL.md` files
+- Home directory: `~/.agentc/skills/*.md`
+
+Skills are injected into the system prompt as a table, allowing the agent to understand available capabilities.
 
 ## Tools
 
@@ -132,24 +131,31 @@ Agent C provides these tools to assist with coding tasks:
 - **edit_file**: Modify file contents with safety backups
 - **create_file**: Create new files (creates parent directories if needed)
 - **search_files**: Search for text in files recursively
-- **list_backups**: List available backups for a file
-- **restore_backup**: Restore a file from a timestamped backup
-- **delegate_to_agent**: Delegate tasks to other personalities
+- **glob_paths**: Find files matching glob patterns
+- **run_command**: Execute shell commands
 
 ## Project Structure
 
 ```
 ├── src/
-│   ├── agentc/               # Legacy Implementation
-│   │   ├── agent.py          # Entry point and event loop
-│   │   ├── ...               # Other legacy files
-│   └── agentc_next/          # Next-Gen Implementation
-│       ├── core/             # Agnostic agent logic
-│       ├── middleware/       # Cross-cutting concerns
-│       ├── adapters/         # UI framework bridges
-│       ├── ui/               # User interfaces (Textual, Console)
-│       └── ...
+│   ├── agentc/               # Main Implementation
+│   │   ├── core/             # Agnostic agent logic
+│   │   ├── middleware/       # Cross-cutting concerns (debouncing)
+│   │   ├── adapters/         # UI framework bridges
+│   │   ├── ui/               # User interfaces (Textual, Console)
+│   │   └── providers.toml    # Provider configuration
+│   └── agentc_legacy/        # Legacy Implementation (DEPRECATED)
+│       └── ...               # Use agent-c-legacy command
 ```
+
+## Legacy Support
+
+The previous personality-based implementation is still available via:
+```bash
+uv run agent-c-legacy --personality coder
+```
+
+This legacy implementation will be removed in a future release. Users are encouraged to migrate to the skills-based approach.
 
 ## Development
 

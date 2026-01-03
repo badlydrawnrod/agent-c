@@ -22,14 +22,16 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = "agentc"
 source-include = [
-    "agentc/*.py",
-    "agentc/*.toml",
-    "agentc/prompts/*.md",
-    "agentc/ui/*.py",
-    "agentc_next/*.py",
+    "agentc/**/*.py",
+    "agentc/**/*.toml",
+    "agentc/**/*.md",
+    "agentc_legacy/**/*.py",
+    "agentc_legacy/**/*.toml",
+    "agentc_legacy/**/*.md",
 ]
 
 [project.scripts]
-agent-c = "agentc.agent:main"
-run-console = "agentc_next.ui.run_console:main"
-run-textual = "agentc_next.ui.run_textual:main"
+agent-c = "agentc.ui.run_textual:main"
+run-console = "agentc.ui.run_console:main"
+run-textual = "agentc.ui.run_textual:main"
+agent-c-legacy = "agentc_legacy.agent:main"

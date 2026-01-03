@@ -1,97 +1,161 @@
-"""Type definitions and data models for Agent C.
+"""Common types and dataclasses for Agent C Next.
 
-This module defines the core data structures used throughout the agent,
-including configuration models for agents and personalities, as well as
-the dependencies injected into the agent's run context.
+This module provides a central location for types shared between the agentic loop,
+adapters, and the UI, helping to prevent circular dependencies and architectural leaks.
 """
 
+from __future__ import annotations
+
+from asyncio import Event
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict, Protocol
+from enum import Enum
+from pathlib import Path
+from typing import Any, AsyncGenerator, Protocol
 
-from pydantic import BaseModel
-
-if TYPE_CHECKING:
-    from pydantic_ai import Agent, DeferredToolRequests
+from pydantic_ai import Agent, DeferredToolRequests
 
 
-class AgentConfig(BaseModel):
-    """Configuration for an agent provider.
+@dataclass
+class ProviderConfig:
+    """Configuration for a provider loaded from TOML."""
 
-    Attributes:
-        provider_cls: The provider class (e.g., AnthropicProvider).
-        model_cls: The model class (e.g., AnthropicModel).
-        api_key_env: Environment variable name for API key (optional).
-        base_url: Custom base URL for the provider (optional).
-        model_name: Name of the model to use.
-    """
-
-    provider_cls: Any
-    model_cls: Any
+    name: str
+    provider_cls_path: str  # e.g., "pydantic_ai.providers.anthropic.AnthropicProvider"
+    model_cls_path: str  # e.g., "pydantic_ai.models.anthropic.AnthropicModel"
+    model_name: str
     api_key_env: str | None = None
     base_url: str | None = None
-    model_name: str
 
 
-class PersonalityConfig(BaseModel):
-    """Configuration for an agent personality.
+class CommandType(Enum):
+    """Types of user commands."""
+
+    NORMAL_INPUT = "normal"  # Regular agent input (not a command)
+    CLEAR = "clear"  # Clear conversation context
+    EXIT = "exit"  # Exit application
+    PROVIDER_SWITCH = "switch"  # Switch to different provider
+    UNKNOWN = "unknown"  # Unknown command (error)
+
+
+@dataclass
+class CommandResult:
+    """Result of parsing a user command."""
+
+    command_type: CommandType
+    args: dict[str, Any]
+
+
+@dataclass
+class CommandEffect:
+    """Effect produced by executing a command.
+
+    This dataclass represents the pure data outcome of a command execution.
+    The UI layer is responsible for interpreting and applying these effects.
+    Commands like EXIT and UNKNOWN are handled directly by the UI since they
+    require framework-specific actions.
 
     Attributes:
-        provider: Name of the provider to use (e.g., 'anthropic').
-        model: Optional override for the model name.
-        prompt_file: Path to the prompt file (relative to prompts/).
-        description: Human-readable description of this personality.
+        new_session: A new agent session to replace the current one, or None.
+        notification: A message to display to the user, or None.
+        should_reset_ui: Whether the UI should clear its state.
     """
 
-    provider: str
-    model: str | None = None
-    prompt_file: str
+    new_session: AgentSessionProtocol | None = None
+    notification: str | None = None
+    should_reset_ui: bool = False
+
+
+@dataclass
+class SkillMetadata:
+    """Metadata for an agent skill."""
+
+    name: str
     description: str
+    path: Path
+    body: str
 
 
 @dataclass
 class RunDeps:
-    """Dependencies for the agent run context.
+    """Dependencies for the agent run context."""
 
-    Attributes:
-        info: Callable to display informational messages to the user.
-        agent_factory: Callable to create agents for delegation. None if delegation disabled.
-    """
+    pass
 
-    info: Callable[[str], None]
-    agent_factory: (
-        Callable[[str], "Agent[RunDeps, str | DeferredToolRequests]"] | None
-    ) = None
+
+type NextAgent = Agent[RunDeps, str | DeferredToolRequests]
 
 
 @dataclass
-class StreamChunk:
-    """Represents a chunk of streamed text from the agent."""
+class AgentChunk:
+    """A chunk of content from the agent (either text or thinking)."""
 
-    text: str
+    content: str
+    is_thought: bool = False
+
+
+@dataclass
+class ToolCallInfo:
+    """Information about a tool call for UI display."""
+
+    tool_name: str
+    args: dict[str, Any]
+    tool_call_id: str
 
 
 @dataclass
 class ApprovalRequest:
-    """Request for user approval of a tool call."""
+    """Yielded when the agentic loop needs approval for tool calls."""
 
-    tool_name: str
+    tool_calls: list[ToolCallInfo]
+
+
+@dataclass
+class ApprovalResponse:
+    """Sent back to the agentic loop with approval decision."""
+
+    approved: bool
+    reason: str | None = None
+
+
+@dataclass
+class ToolResult:
+    """A structured result from a tool execution."""
+
+    success: bool
+    content: str
+    error: str | None = None
+
+
+@dataclass
+class ToolCallResultInfo:
+    """Detailed information about a completed tool call."""
+
     tool_call_id: str
-    params: Dict[str, Any] | str | None
+    result: ToolResult
 
 
-class LoopCallbacks(Protocol):
-    """Protocol for UI callbacks used by the interaction loop."""
+@dataclass
+class AgentDone:
+    """Yielded when the agentic loop completes successfully."""
 
-    def on_thinking(self) -> None: ...
+    history: Any
 
-    def on_stream_chunk(self, chunk: StreamChunk) -> None: ...
 
-    def on_stream_complete(self) -> None: ...
+type AgentEvent = (
+    AgentChunk | ToolCallInfo | ToolCallResultInfo | ApprovalRequest | AgentDone
+)
 
-    def on_status_update(self, status: str) -> None: ...
+type AgentEventStream = AsyncGenerator[AgentEvent, ApprovalResponse | None]
 
-    def on_cancelled(self, message: str) -> None: ...
 
-    async def request_approval(self, req: ApprovalRequest) -> bool: ...
+class AgentSessionProtocol(Protocol):
+    """Protocol defining the interface for an agentic session."""
 
-    def on_thinking_chunk(self, chunk: str) -> None: ...
+    def run(
+        self,
+        prompt: str,
+        deps: RunDeps,
+        cancellation_event: Event | None = None,
+    ) -> AgentEventStream:
+        """Run the agentic session with the given prompt and dependencies."""
+        ...

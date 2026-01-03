@@ -1,76 +1,37 @@
-"""Command handling and parsing for Agent C.
+"""
+Command parsing and execution for Agent C Next.
 
 This module centralizes command semantics, ensuring consistent behavior
-across all command invocations. It provides a single source of truth for
-what commands exist and what they do.
+across all UIs. It provides a single source of truth for what commands
+exist and what they do.
 
-Design:
-- Parse: User input → CommandType + args
-- Validate: Check personality names, etc.
-- Return: Structured result for callers to act on
-
-Example:
-    handler = CommandHandler({'coder': ..., 'reviewer': ...})
-    cmd_type, args = handler.parse("/personality reviewer")
-    # Returns CommandResult(CommandType.PERSONALITY_SWITCH, {'personality': 'reviewer'})
+The module follows an effect-based pattern:
+- CommandParser: Parses user input into structured CommandResult
+- execute_command: Produces CommandEffect from CommandResult (pure function)
+- UI layer: Applies the effects (framework-specific)
 """
 
-from dataclasses import dataclass
-from enum import Enum
-from typing import Any
+from .factory import create_agent
+from .loop import AgentSession
+from .types import CommandEffect, CommandResult, CommandType, ProviderConfig
 
 
-class CommandType(Enum):
-    """Types of user commands."""
-
-    NORMAL_INPUT = "normal"  # Regular agent input (not a command)
-    CLEAR = "clear"  # Clear conversation context
-    EXIT = "exit"  # Exit application
-    PERSONALITY_SWITCH = "switch"  # Switch to different personality
-    UNKNOWN = "unknown"  # Unknown command (error)
-
-
-@dataclass
-class CommandResult:
-    """Result of parsing a user command.
-
-    Attributes:
-        command_type: Type of command parsed.
-        args: Dictionary of parsed arguments specific to command type.
-              Examples:
-              - NORMAL_INPUT: {} (no args)
-              - CLEAR: {} (no args)
-              - EXIT: {} (no args)
-              - PERSONALITY_SWITCH: {'personality': 'reviewer'}
-              - UNKNOWN: {'input': '/badcommand', 'error': 'Unknown command...'}
-    """
-
-    command_type: CommandType
-    args: dict[str, Any]
-
-
-class CommandHandler:
+class CommandParser:
     """Centralized command parsing and validation.
-
-    This class is the single source of truth for all command semantics.
-    Both the main event loop (agent.py) and the UI (console.py) use this
-    same handler, ensuring consistent behavior across the application.
 
     Responsibilities:
     - Parse user input into structured commands
-    - Validate commands (e.g., personality names)
+    - Validate commands (e.g., provider names)
     - Return structured results for callers to act on
-    - Provide error messages for invalid commands
     """
 
-    def __init__(self, personalities: dict[str, Any]):
-        """Initialize handler with available personalities.
+    def __init__(self, providers: dict[str, ProviderConfig]):
+        """Initialize parser with available providers.
 
         Args:
-            personalities: Dict of personality names to PersonalityConfig.
-                          Used to validate /personality commands.
+            providers: Dict of provider names to ProviderConfig.
         """
-        self.personalities = personalities
+        self.providers = providers
 
     def parse(self, user_input: str) -> CommandResult:
         """Parse user input into structured command.
@@ -78,7 +39,7 @@ class CommandHandler:
         Handles these command formats:
         - /clear or /reset: Clear conversation context
         - /exit, /quit, or /bye: Exit application
-        - /personality <name>: Switch to personality
+        - /provider <name>: Switch to provider
         - Anything else: Normal user input (not a command)
 
         Args:
@@ -86,29 +47,6 @@ class CommandHandler:
 
         Returns:
             CommandResult with command type and arguments.
-
-        Examples:
-            >>> handler = CommandHandler({'coder': ..., 'reviewer': ...})
-            >>> handler.parse("hello world")
-            CommandResult(command_type=CommandType.NORMAL_INPUT, args={})
-
-            >>> handler.parse("/clear")
-            CommandResult(command_type=CommandType.CLEAR, args={})
-
-            >>> handler.parse("/personality reviewer")
-            CommandResult(
-                command_type=CommandType.PERSONALITY_SWITCH,
-                args={'personality': 'reviewer'}
-            )
-
-            >>> handler.parse("/personality invalid")
-            CommandResult(
-                command_type=CommandType.UNKNOWN,
-                args={
-                    'input': '/personality invalid',
-                    'error': 'Unknown personality: invalid'
-                }
-            )
         """
         # Normalize input
         command = user_input.strip().lower()
@@ -125,21 +63,21 @@ class CommandHandler:
         if command in ("/clear", "/reset"):
             return CommandResult(CommandType.CLEAR, {})
 
-        # Check for personality switch command
+        # Check for provider switch command
         parts = command.split(maxsplit=1)
-        if len(parts) >= 2 and parts[0] == "/personality":
-            personality_name = parts[1].strip()
-            if personality_name in self.personalities:
+        if len(parts) >= 2 and parts[0] == "/provider":
+            provider_name = parts[1].strip()
+            if provider_name in self.providers:
                 return CommandResult(
-                    CommandType.PERSONALITY_SWITCH,
-                    {"personality": personality_name},
+                    CommandType.PROVIDER_SWITCH,
+                    {"provider": provider_name},
                 )
             else:
                 return CommandResult(
                     CommandType.UNKNOWN,
                     {
                         "input": command,
-                        "error": f"Unknown personality: {personality_name}",
+                        "error": f"Unknown provider: {provider_name}",
                     },
                 )
 
@@ -152,3 +90,42 @@ class CommandHandler:
 
         # Regular input (not a command)
         return CommandResult(CommandType.NORMAL_INPUT, {})
+
+
+def execute_command(
+    result: CommandResult,
+    provider_name: str | None = None,
+) -> CommandEffect | None:
+    """Execute a command and return its effect.
+
+    This is a pure function that takes a parsed command and returns
+    the effect that should be applied by the UI. Commands that require
+    framework-specific handling (EXIT, UNKNOWN, NORMAL_INPUT) return None.
+
+    Args:
+        result: The parsed command result from CommandParser.
+        provider_name: Optional provider name for PROVIDER_SWITCH command.
+
+    Returns:
+        CommandEffect describing what should happen, or None if the
+        command should be handled directly by the UI layer.
+    """
+    match result.command_type:
+        case CommandType.CLEAR:
+            return CommandEffect(
+                new_session=AgentSession(agent=create_agent()),
+                notification="Conversation cleared",
+                should_reset_ui=True,
+            )
+
+        case CommandType.PROVIDER_SWITCH:
+            provider = result.args.get("provider", provider_name)
+            return CommandEffect(
+                new_session=AgentSession(agent=create_agent(provider_name=provider)),
+                notification=f"Switched to provider: {provider}",
+                should_reset_ui=True,
+            )
+
+        case _:
+            # EXIT, UNKNOWN, NORMAL_INPUT are handled by the UI layer
+            return None
