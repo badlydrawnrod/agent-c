@@ -6,12 +6,10 @@ reduce UI chattiness while preserving the agentic loop's async
 send/receive protocol.
 """
 
-from collections.abc import AsyncGenerator
-
 from ..core.types import (
     AgentChunk,
     AgentDone,
-    AgentEvent,
+    AgentEventStream,
     ApprovalRequest,
     ApprovalResponse,
 )
@@ -58,8 +56,8 @@ class DebouncingMiddleware:
 
     async def process(
         self,
-        events: AsyncGenerator[AgentEvent, ApprovalResponse | None],
-    ) -> AsyncGenerator[AgentEvent, ApprovalResponse | None]:
+        events: AgentEventStream,
+    ) -> AgentEventStream:
         response: ApprovalResponse | None = None
 
         while True:

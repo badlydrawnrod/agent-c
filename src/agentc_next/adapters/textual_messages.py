@@ -10,7 +10,7 @@ from typing import Any
 
 from textual.message import Message
 
-from ..core.types import ToolCallInfo
+from ..core.types import ToolCallInfo, ToolResult
 
 
 class AgentThinkingMessage(Message):
@@ -37,6 +37,15 @@ class AgentToolCallMessage(Message):
         self.tool_call_id = tool_call_id
         self.tool_name = tool_name
         self.args = args
+
+
+class AgentToolResultMessage(Message):
+    """Agent tool call completed with a result."""
+
+    def __init__(self, tool_call_id: str, result: ToolResult) -> None:
+        super().__init__()
+        self.tool_call_id = tool_call_id
+        self.result = result
 
 
 class AgentApprovalRequestMessage(Message):

@@ -12,11 +12,13 @@ from textual.app import App
 from ..core.types import (
     AgentChunk,
     AgentDone as AgentDoneEvent,
+    AgentEventStream,
     AgentSessionProtocol,
     ApprovalRequest,
     ApprovalResponse,
     RunDeps,
     ToolCallInfo,
+    ToolCallResultInfo,
 )
 from ..middleware.debouncing import DebouncingMiddleware
 from .textual_messages import (
@@ -27,6 +29,7 @@ from .textual_messages import (
     AgentThinkingMessage,
     AgentTextMessage,
     AgentToolCallMessage,
+    AgentToolResultMessage,
 )
 
 
@@ -48,22 +51,25 @@ class TextualAgentAdapter:
         self._debounce_threshold = debounce_threshold
 
     def _is_cancelled(self) -> bool:
+        """Check if the operation has been cancelled."""
         if isinstance(self._cancellation_event, asyncio.Event):
             return self._cancellation_event.is_set()
         return bool(self._cancellation_event)
 
+    def _get_event_stream(self) -> AgentEventStream:
+        """Create the debounced event stream from the session."""
+        raw_events = self._session.run(
+            prompt=self._prompt,
+            deps=RunDeps(),
+            cancellation_event=self._cancellation_event,
+        )
+        middleware = DebouncingMiddleware(threshold=self._debounce_threshold)
+        return middleware.process(raw_events)
+
     async def run(self) -> None:
+        """Run the adapter loop, dispatching events to the Textual app."""
         try:
-            # Note: session is expected to adhere to AgentSessionProtocol.
-            raw_events = self._session.run(
-                prompt=self._prompt,
-                deps=RunDeps(),
-                cancellation_event=self._cancellation_event,
-            )
-
-            middleware = DebouncingMiddleware(threshold=self._debounce_threshold)
-            events = middleware.process(raw_events)
-
+            events = self._get_event_stream()
             response: ApprovalResponse | None = None
 
             while True:
@@ -75,25 +81,25 @@ class TextualAgentAdapter:
                     event = await events.asend(response)
                     response = None
 
-                    if isinstance(event, AgentChunk):
-                        if event.is_thought:
-                            self._app.post_message(AgentThinkingMessage(event.content))
-                        else:
-                            self._app.post_message(AgentTextMessage(event.content))
+                    match event:
+                        case AgentChunk(content=text, is_thought=True):
+                            self._app.post_message(AgentThinkingMessage(text))
 
-                    elif isinstance(event, ToolCallInfo):
-                        # ToolCallInfo is now yielded directly for non-approval calls if any,
-                        # or mapped from PartStartEvent in the loop helper.
-                        self._app.post_message(
-                            AgentToolCallMessage(event.tool_call_id, event.tool_name, event.args)
-                        )
+                        case AgentChunk(content=text, is_thought=False):
+                            self._app.post_message(AgentTextMessage(text))
 
-                    elif isinstance(event, ApprovalRequest):
-                        response = await self._handle_approval_request(event)
+                        case ToolCallInfo(tool_call_id=id, tool_name=name, args=args):
+                            self._app.post_message(AgentToolCallMessage(id, name, args))
 
-                    elif isinstance(event, AgentDoneEvent):
-                        self._app.post_message(AgentDoneMessage(event.history))
-                        break
+                        case ToolCallResultInfo(tool_call_id=id, result=result):
+                            self._app.post_message(AgentToolResultMessage(id, result))
+
+                        case ApprovalRequest() as request:
+                            response = await self._handle_approval_request(request)
+
+                        case AgentDoneEvent(history=history):
+                            self._app.post_message(AgentDoneMessage(history))
+                            break
 
                 except StopAsyncIteration:
                     break
@@ -104,6 +110,7 @@ class TextualAgentAdapter:
     async def _handle_approval_request(
         self, request: ApprovalRequest
     ) -> ApprovalResponse:
+        """Post an approval request to the UI and wait for the result."""
         future: asyncio.Future[tuple[bool, str | None]] = asyncio.Future()
         self._app.post_message(AgentApprovalRequestMessage(request.tool_calls, future))
         approved, reason = await future

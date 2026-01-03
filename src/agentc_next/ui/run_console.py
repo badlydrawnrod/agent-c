@@ -1,69 +1,102 @@
+"""Console UI entry point using the ConsoleAgentAdapter.
+
+This module demonstrates the console adapter pattern, translating agent
+events into console output via callbacks.
+"""
+
 import asyncio
 
+from ..adapters.console import ConsoleAgentAdapter
+from ..adapters.console_messages import (
+    ConsoleApprovalRequestEvent,
+    ConsoleCancelledEvent,
+    ConsoleDoneEvent,
+    ConsoleErrorEvent,
+    ConsoleEvent,
+    ConsoleTextEvent,
+    ConsoleThinkingEvent,
+    ConsoleToolCallEvent,
+    ConsoleToolResultEvent,
+)
 from ..core.factory import create_agent
-from ..core.loop import (
-    AgentSession,
-)
-from ..core.types import (
-    AgentChunk,
-    AgentDone,
-    ApprovalRequest,
-    ApprovalResponse,
-    RunDeps,
-)
-from ..middleware.debouncing import DebouncingMiddleware
+from ..core.loop import AgentSession
+from ..core.types import ApprovalResponse
 
 
-async def run_console_ui():
+def handle_event(event: ConsoleEvent) -> None:
+    """Handle console events by printing to stdout.
+
+    Args:
+        event: The console event to handle.
+    """
+    match event:
+        case ConsoleThinkingEvent(text=text):
+            print(f"\n[THINKING]: {text}", end="", flush=True)
+
+        case ConsoleTextEvent(text=text):
+            print(text, end="", flush=True)
+
+        case ConsoleToolCallEvent(tool_name=name, args=args):
+            print(f"\n[TOOL CALL]: {name}({args})", flush=True)
+
+        case ConsoleToolResultEvent(result=result):
+            status = "✓" if result.success else "✗"
+            print(f"[TOOL RESULT {status}]: {result.content[:100]}...", flush=True)
+
+        case ConsoleDoneEvent():
+            print("\n" + "-" * 40)
+            print("DONE")
+
+        case ConsoleErrorEvent(error=error):
+            print(f"\nERROR: {error}")
+
+        case ConsoleCancelledEvent():
+            print("\nCANCELLED")
+
+
+async def handle_approval(event: ConsoleApprovalRequestEvent) -> ApprovalResponse:
+    """Handle approval requests.
+
+    In a real console app, this would use input() to get user confirmation.
+    For demonstration, we auto-approve.
+
+    Args:
+        event: The approval request event containing tool calls.
+
+    Returns:
+        ApprovalResponse indicating whether the tools are approved.
+    """
+    print("\n" + "!" * 40)
+    print("APPROVAL REQUIRED:")
+    for call in event.tool_calls:
+        print(f"  - {call.tool_name}({call.args})")
+
+    # In a real console app, we'd use input().
+    # For demonstration, we auto-approve to show the flow.
+    print("Auto-approving for demo...")
+    print("!" * 40 + "\n")
+    return ApprovalResponse(approved=True)
+
+
+async def run_console_ui() -> None:
+    """Run the console UI using the ConsoleAgentAdapter."""
     # Setup agent using the factory
     agent = create_agent()
+    session = AgentSession(agent=agent)
 
     prompt = "List the files in the current directory and then read README.md"
-    deps = RunDeps()
 
     print(f"Prompt: {prompt}\n")
     print("-" * 40)
 
-    session = AgentSession(agent=agent)
-    raw_gen = session.run(prompt, deps)
+    adapter = ConsoleAgentAdapter(
+        session=session,
+        prompt=prompt,
+        on_event=handle_event,
+        on_approval=handle_approval,
+    )
 
-    middleware = DebouncingMiddleware(threshold=40)
-    gen = middleware.process(raw_gen)
-
-    response = None
-
-    try:
-        while True:
-            event = await gen.asend(response)
-            response = None
-
-            if isinstance(event, AgentChunk):
-                if event.is_thought:
-                    print(f"\n[THINKING]: {event.content}", end="", flush=True)
-                else:
-                    print(event.content, end="", flush=True)
-
-            elif isinstance(event, ApprovalRequest):
-                print("\n" + "!" * 40)
-                print("APPROVAL REQUIRED:")
-                for call in event.tool_calls:
-                    print(f"  - {call.tool_name}({call.args})")
-
-                # In a real console app, we'd use input().
-                # For demonstration, we auto-approve to show the flow.
-                print("Auto-approving for demo...")
-                response = ApprovalResponse(approved=True)
-                print("!" * 40 + "\n")
-
-            elif isinstance(event, AgentDone):
-                print("\n" + "-" * 40)
-                print("DONE")
-                break
-
-    except StopAsyncIteration:
-        pass
-    except Exception as e:
-        print(f"\nERROR: {e}")
+    await adapter.run()
 
 
 def main():

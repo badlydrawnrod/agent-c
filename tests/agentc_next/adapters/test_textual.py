@@ -8,11 +8,16 @@ from agentc_next.core.types import (
     AgentDone as AgentDoneEvent,
     AgentSessionProtocol,
     ApprovalRequest,
+    ToolCallInfo,
+    ToolCallResultInfo,
+    ToolResult,
 )
 from agentc_next.adapters.textual_messages import (
     AgentTextMessage,
     AgentDoneMessage,
     AgentApprovalRequestMessage,
+    AgentToolCallMessage,
+    AgentToolResultMessage,
 )
 
 
@@ -88,3 +93,38 @@ async def _test_textual_adapter_approval():
 
 def test_textual_adapter_approval():
     asyncio.run(_test_textual_adapter_approval())
+
+
+async def _test_textual_adapter_tool_result():
+    """Test that TextualAgentAdapter maps ToolCallResultInfo to AgentToolResultMessage."""
+    app = MagicMock(spec=App)
+    session = MagicMock(spec=AgentSessionProtocol)
+    
+    async def mock_run(*args, **kwargs):
+        # Yield a tool result
+        tool_result = ToolResult(success=True, content="Tool output")
+        yield ToolCallResultInfo(tool_call_id="call1", result=tool_result)
+        yield AgentDoneEvent(history=["msg1"])
+    
+    session.run = mock_run
+    
+    adapter = TextualAgentAdapter(app=app, session=session, prompt="test")
+    await adapter.run()
+    
+    # Verify messages posted to app
+    messages = extract_posted_messages(app)
+    
+    # Should have tool result message and done message
+    tool_result_msgs = [msg for msg in messages if isinstance(msg, AgentToolResultMessage)]
+    assert len(tool_result_msgs) == 1
+    
+    tool_result_msg = tool_result_msgs[0]
+    assert tool_result_msg.tool_call_id == "call1"
+    # Result can be ToolResult or dict
+    if isinstance(tool_result_msg.result, dict):
+        assert tool_result_msg.result.get("success") is True
+    else:
+        assert tool_result_msg.result.success is True
+
+def test_textual_adapter_tool_result():
+    asyncio.run(_test_textual_adapter_tool_result())

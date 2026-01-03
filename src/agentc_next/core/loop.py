@@ -8,13 +8,13 @@ tool-approval flow.
 """
 
 import asyncio
-from collections.abc import AsyncGenerator
 from typing import Any
 
 from pydantic_ai import (
     AgentRunResultEvent,
     DeferredToolRequests,
     DeferredToolResults,
+    FunctionToolResultEvent,
     ToolDenied,
 )
 from pydantic_ai.messages import (
@@ -25,19 +25,22 @@ from pydantic_ai.messages import (
     ThinkingPart,
     ThinkingPartDelta,
     ToolCallPart,
+    ToolReturnPart,
 )
 
 from .tool_parsing import parse_tool_args
 from .types import (
     AgentChunk,
     AgentDone,
-    AgentEvent,
     AgentSessionProtocol,
     ApprovalRequest,
     ApprovalResponse,
     RunDeps,
     NextAgent,
     ToolCallInfo,
+    ToolCallResultInfo,
+    ToolResult,
+    AgentEventStream,
 )
 
 
@@ -58,31 +61,64 @@ class AgentSession(AgentSessionProtocol):
 
     @property
     def history(self) -> list[Any]:
+        """Return the current message history."""
         return self._history
 
     @property
     def agent(self) -> NextAgent:
+        """Return the underlying agent implementation."""
         return self._agent
 
     def update_history(self, history: list[Any]) -> None:
+        """Update the session history."""
         self._history = history
 
     def _map_event_to_chunk(self, event: Any) -> AgentChunk | None:
         """Map a Pydantic AI event to an agnostic AgentChunk."""
-        if isinstance(event, PartStartEvent):
-            part = event.part
-            if isinstance(part, TextPart) and part.content:
-                return AgentChunk(content=part.content, is_thought=False)
-            if isinstance(part, ThinkingPart) and part.content:
-                return AgentChunk(content=part.content, is_thought=True)
+        match event:
+            case PartStartEvent(part=TextPart(content=text)) if text:
+                return AgentChunk(content=text, is_thought=False)
 
-        if isinstance(event, PartDeltaEvent):
-            delta = event.delta
-            if isinstance(delta, TextPartDelta):
-                return AgentChunk(content=delta.content_delta, is_thought=False)
-            if isinstance(delta, ThinkingPartDelta) and delta.content_delta:
-                return AgentChunk(content=delta.content_delta, is_thought=True)
+            case PartStartEvent(part=ThinkingPart(content=thought)) if thought:
+                return AgentChunk(content=thought, is_thought=True)
 
+            case PartDeltaEvent(delta=TextPartDelta(content_delta=text)):
+                return AgentChunk(content=text, is_thought=False)
+
+            case PartDeltaEvent(delta=ThinkingPartDelta(content_delta=thought)) if thought:
+                return AgentChunk(content=thought, is_thought=True)
+
+        return None
+
+    def _map_tool_call(self, event: Any) -> ToolCallInfo | None:
+        """Map a Pydantic AI PartStartEvent to an agnostic ToolCallInfo."""
+        match event:
+            case PartStartEvent(
+                part=ToolCallPart(tool_name=name, args=args, tool_call_id=call_id)
+            ):
+                return ToolCallInfo(
+                    tool_name=name,
+                    args=parse_tool_args(args),
+                    tool_call_id=call_id or "unknown",
+                )
+        return None
+
+    def _map_tool_result(self, event: Any) -> ToolCallResultInfo | None:
+        """Map a Pydantic AI FunctionToolResultEvent to an agnostic ToolCallResultInfo."""
+        match event:
+            case FunctionToolResultEvent(
+                result=ToolReturnPart(tool_call_id=call_id, content=content)
+            ):
+                match content:
+                    case ToolResult() as tr:
+                        return ToolCallResultInfo(tool_call_id=call_id, result=tr)
+                    case {"success": success, "content": c} as d:
+                        return ToolCallResultInfo(
+                            tool_call_id=call_id,
+                            result=ToolResult(
+                                success=success, content=c, error=d.get("error")
+                            ),
+                        )
         return None
 
     def _is_cancelled(self, cancellation_event: asyncio.Event | None) -> bool:
@@ -132,7 +168,7 @@ class AgentSession(AgentSessionProtocol):
         prompt: str,
         deps: RunDeps,
         cancellation_event: asyncio.Event | None = None,
-    ) -> AsyncGenerator[AgentEvent, ApprovalResponse | None]:
+    ) -> AgentEventStream:
         """
         Run the agentic session with the given prompt and dependencies.
 
@@ -154,40 +190,48 @@ class AgentSession(AgentSessionProtocol):
                 if self._is_cancelled(cancellation_event):
                     return
 
+                # 1. Map content chunks (text/thinking)
                 if chunk := self._map_event_to_chunk(event):
                     yield chunk
+                    continue
 
-                elif isinstance(event, PartStartEvent) and isinstance(
-                    event.part, ToolCallPart
-                ):
-                    yield ToolCallInfo(
-                        tool_name=event.part.tool_name,
-                        args=parse_tool_args(event.part.args),
-                        tool_call_id=event.part.tool_call_id or "unknown",
-                    )
+                # 2. Map tool calls
+                if tool_call := self._map_tool_call(event):
+                    yield tool_call
+                    continue
 
-                elif isinstance(event, AgentRunResultEvent):
-                    if isinstance(event.result.output, DeferredToolRequests):
-                        # This is the bi-directional handshake
-                        request = self._create_approval_request(event)
-                        approval_response: ApprovalResponse | None = yield request
+                # 3. Map tool results
+                if tool_result := self._map_tool_result(event):
+                    yield tool_result
+                    continue
 
-                        if approval_response is None:
+                # 4. Handle run results (Done or Approval Handshake)
+                match event:
+                    case AgentRunResultEvent(result=result):
+                        if isinstance(result.output, DeferredToolRequests):
+                            # Approval Handshake
+                            request = self._create_approval_request(event)
+                            approval_response: ApprovalResponse | None = yield request
+
+                            if approval_response is None:
+                                return
+
+                            approval_results = self._create_approval_results(
+                                event, approval_response
+                            )
+                            # Sync history and break to start next turn
+                            self.update_history(result.all_messages())
+                            current_prompt = None
+                            break
+                        else:
+                            # Final Result
+                            self.update_history(result.all_messages())
+                            yield AgentDone(history=self._history)
                             return
 
-                        approval_results = self._create_approval_results(
-                            event, approval_response
-                        )
-                        self.update_history(event.result.all_messages())
-                        current_prompt = None
-                        break
-
-                    else:
-                        self.update_history(event.result.all_messages())
-                        yield AgentDone(history=self._history)
-                        return
-
             else:
+                # Fallback if the stream ends without a result event
+                yield AgentDone(history=self._history)
                 return
 
 

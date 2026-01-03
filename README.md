@@ -8,9 +8,10 @@ Hugely inspired by [How to Build an Agent](https://ampcode.com/how-to-build-an-a
 
 ## Features
 
+- **Next-Gen TUI**: Modern, event-driven Textual interface with debounced streaming and approval workflows
 - **Multiple LLM Providers**: Support for Ollama, Anthropic Claude, OpenAI GPT, and others
 - **Configurable Personalities**: Pre-built coder, reviewer, and debugger personas with custom prompts
-- **File Management Tools**: Read, edit, create, list, and search files
+- **File Management Tools**: Read, edit, create, list, and search files (with combined `.gitignore` support)
 - **Safe Editing**: Automatic backups before file modifications with rollback capability
 - **Agent Delegation**: Personalities can delegate tasks to other personalities
 - **Interactive CLI**: Rich terminal UI with conversation history and command support
@@ -138,38 +139,16 @@ Agent C provides these tools to assist with coding tasks:
 ## Project Structure
 
 ```
-src/agentc/
-├── agent.py                  # Entry point and event loop
-├── config.toml               # User configuration overrides
-├── personalities.toml        # Personality definitions
-├── providers.toml            # LLM provider definitions
-├── prompts/                  # System prompts for each personality
-│   ├── coder.md
-│   ├── reviewer.md
-│   └── debugger.md
-├── core/
-│   ├── agent_factory.py      # Agent creation and configuration
-│   ├── cli.py                # Command-line argument parsing
-│   ├── commands.py           # User command handling and execution
-│   ├── config.py             # TOML configuration file loading
-│   ├── file_ops.py           # File operations with backup/restore
-│   ├── runner.py             # Agent execution and tool loop
-│   ├── types.py              # Type definitions and Pydantic models
-│   ├── _config.py            # Configuration utilities
-│   ├── _model.py             # Model selection and validation
-│   ├── _prompt.py            # Prompt loading and management
-│   ├── _provider.py          # Provider selection and initialization
-│   ├── tools/
-│   │   ├── agent_tools.py    # Agent delegation functionality
-│   │   ├── backup_tools.py   # Backup and restore operations
-│   │   ├── file_tools.py     # File read/write/search operations
-│   │   ├── registry.py       # Tool registry and discovery
-│   │   └── __init__.py
-│   └── __init__.py
-└── ui/
-    ├── console.py            # Terminal UI with Rich library
-    ├── protocol.py           # UI protocol definitions
-    └── __init__.py
+├── src/
+│   ├── agentc/               # Legacy Implementation
+│   │   ├── agent.py          # Entry point and event loop
+│   │   ├── ...               # Other legacy files
+│   └── agentc_next/          # Next-Gen Implementation
+│       ├── core/             # Agnostic agent logic
+│       ├── middleware/       # Cross-cutting concerns
+│       ├── adapters/         # UI framework bridges
+│       ├── ui/               # User interfaces (Textual, Console)
+│       └── ...
 ```
 
 ## Development

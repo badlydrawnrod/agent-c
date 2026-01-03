@@ -13,8 +13,8 @@
     python -m venv .venv; .\venv\Scripts\Activate.ps1; uv sync
     ```
 - **Run legacy agent**: `uv run agent-c --personality coder`
-- **Run Textual UI (agentc_next)**: `uv run run-textual`
-- **Run Console UI (agentc_next)**: `uv run run-console`
+- **Install Textual UI**: `uv run run-textual`
+- **Install Console UI**: `uv run run-console`
 - **Test all**: `uv run pytest`
 - **Test agentc_next only**: `uv run pytest tests/agentc_next/`
 - **Type check**: `uv run mypy`
@@ -24,7 +24,7 @@
 ## Windows PowerShell Quickstart
 
 ```powershell
-python -m venv .venv; .\venv\Scripts\Activate.ps1; uv sync
+uv sync
 uv run run-textual  # Launch the Textual UI
 ```
 
@@ -37,7 +37,7 @@ Traditional monolithic agent with file operations, multiple personalities, and C
 
 ### Next-Generation Implementation (`src/agentc_next/`)
 Event-driven, layered architecture with:
-- **`core/`**: Agnostic agentic logic (types, event loop, agent factory, tools). No UI or framework dependencies.
+- **`core/`**: Agnostic agentic logic (types, event loop, agent factory, tools). `tools.py` uses combined ignore patterns for discovery.
 - **`middleware/`**: Cross-cutting concerns (e.g., debouncing)
 - **`adapters/`**: Bridges core event stream to specific frameworks. Owns translation logic and UI-specific message types.
 - **`ui/`**: User interface implementations (Textual TUI, Console)

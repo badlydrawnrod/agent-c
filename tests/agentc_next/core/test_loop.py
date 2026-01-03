@@ -21,6 +21,8 @@ from agentc_next.core.types import (
     RunDeps,
     NextAgent,
     ToolCallInfo,
+    ToolCallResultInfo,
+    ToolResult,
 )
 
 
@@ -193,3 +195,58 @@ async def _test_agent_session_run_tool_call():
 
 def test_agent_session_run_tool_call():
     asyncio.run(_test_agent_session_run_tool_call())
+
+
+async def _test_agent_session_run_tool_result():
+    """Test that AgentSession detects and yields tool results."""
+    from pydantic_ai import FunctionToolResultEvent
+    from pydantic_ai.messages import ToolReturnPart
+    
+    agent = MagicMock(spec=NextAgent)
+    
+    # Mock agent to yield a tool call, then a tool result, then completion
+    async def mock_run_stream_events(*args, **kwargs):
+        yield PartStartEvent(
+            part=ToolCallPart(tool_name="my_tool", args={"x": 1}, tool_call_id="call1"),
+            index=0
+        )
+        
+        # Yield a tool result event
+        tool_result = ToolResult(success=True, content="Tool executed successfully")
+        result_event = MagicMock(spec=FunctionToolResultEvent)
+        result_event.result = MagicMock(spec=ToolReturnPart)
+        result_event.result.tool_call_id = "call1"
+        result_event.result.content = tool_result
+        yield result_event
+        
+        yield create_mock_agent_run_result(output="Finished", history=["msg1"])
+
+    agent.run_stream_events = mock_run_stream_events
+    
+    # Run session and collect events
+    session = AgentSession(agent=agent)
+    gen = session.run("Use tool", RunDeps())
+    
+    results = []
+    async for event in gen:
+        results.append(event)
+    
+    # Verify events
+    assert len(results) == 3
+    
+    tool_call = results[0]
+    assert isinstance(tool_call, ToolCallInfo)
+    assert tool_call.tool_name == "my_tool"
+    
+    tool_result_info = results[1]
+    assert isinstance(tool_result_info, ToolCallResultInfo)
+    assert tool_result_info.tool_call_id == "call1"
+    assert isinstance(tool_result_info.result, ToolResult)
+    assert tool_result_info.result.success is True
+    
+    completion = results[2]
+    assert isinstance(completion, AgentDone)
+
+
+def test_agent_session_run_tool_result():
+    asyncio.run(_test_agent_session_run_tool_result())

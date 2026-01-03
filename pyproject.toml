@@ -5,6 +5,7 @@ description = "Agent C is a simple code editing assistant powered by Pydantic AI
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "pathspec>=0.12.1",
     "prompt-toolkit>=3.0.52",
     "pydantic-ai>=1.6.0",
     "textual>=6.7.0",
