@@ -20,7 +20,7 @@ from ..adapters.console_messages import (
 )
 from ..core.factory import create_agent
 from ..core.loop import AgentSession
-from ..core.types import ApprovalResponse
+from ..core.types import ApprovalResponse, RunDeps
 
 
 def handle_event(event: ConsoleEvent) -> None:
@@ -80,9 +80,12 @@ async def handle_approval(event: ConsoleApprovalRequestEvent) -> ApprovalRespons
 
 async def run_console_ui() -> None:
     """Run the console UI using the ConsoleAgentAdapter."""
+    from pathlib import Path
+
     # Setup agent using the factory
+    deps = RunDeps(root_paths=[Path.cwd()])
     agent = create_agent()
-    session = AgentSession(agent=agent)
+    session = AgentSession(agent=agent, deps=deps)
 
     prompt = "List the files in the current directory and then read README.md"
 

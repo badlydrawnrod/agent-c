@@ -74,7 +74,8 @@ def create_mock_approval_result(tool_name: str, tool_id: str) -> MagicMock:
 async def _test_agent_session_history():
     """Test that AgentSession maintains conversation history."""
     agent = MagicMock(spec=NextAgent)
-    session = AgentSession(agent=agent)
+    deps = RunDeps(root_paths=[])
+    session = AgentSession(agent=agent, deps=deps)
     
     # Initially empty
     assert session.history == []
@@ -100,8 +101,9 @@ async def _test_agent_session_run_text():
     agent.run_stream_events = mock_run_stream_events
     
     # Run session and collect events
-    session = AgentSession(agent=agent)
-    gen = session.run("Hi", RunDeps())
+    deps = RunDeps(root_paths=[])
+    session = AgentSession(agent=agent, deps=deps)
+    gen = session.run("Hi")
     
     results = []
     async for event in gen:
@@ -139,8 +141,9 @@ async def _test_agent_session_run_approval_handshake():
     agent.run_stream_events = mock_run_stream_events
     
     # Run session with manual async iteration for handshake
-    session = AgentSession(agent=agent)
-    gen = session.run("Run tool", RunDeps())
+    deps = RunDeps(root_paths=[])
+    session = AgentSession(agent=agent, deps=deps)
+    gen = session.run("Run tool")
     
     it = aiter(gen)
     
@@ -174,8 +177,9 @@ async def _test_agent_session_run_tool_call():
     agent.run_stream_events = mock_run_stream_events
     
     # Run session and collect events
-    session = AgentSession(agent=agent)
-    gen = session.run("Use tool", RunDeps())
+    deps = RunDeps(root_paths=[])
+    session = AgentSession(agent=agent, deps=deps)
+    gen = session.run("Use tool")
     
     results = []
     async for event in gen:
@@ -224,8 +228,9 @@ async def _test_agent_session_run_tool_result():
     agent.run_stream_events = mock_run_stream_events
     
     # Run session and collect events
-    session = AgentSession(agent=agent)
-    gen = session.run("Use tool", RunDeps())
+    deps = RunDeps(root_paths=[])
+    session = AgentSession(agent=agent, deps=deps)
+    gen = session.run("Use tool")
     
     results = []
     async for event in gen:

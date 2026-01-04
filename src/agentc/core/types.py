@@ -7,7 +7,7 @@ adapters, and the UI, helping to prevent circular dependencies and architectural
 from __future__ import annotations
 
 from asyncio import Event
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncGenerator, Protocol
@@ -79,7 +79,7 @@ class SkillMetadata:
 class RunDeps:
     """Dependencies for the agent run context."""
 
-    pass
+    root_paths: list[Path] = field(default_factory=list)
 
 
 type NextAgent = Agent[RunDeps, str | DeferredToolRequests]
@@ -154,8 +154,7 @@ class AgentSessionProtocol(Protocol):
     def run(
         self,
         prompt: str,
-        deps: RunDeps,
         cancellation_event: Event | None = None,
     ) -> AgentEventStream:
-        """Run the agentic session with the given prompt and dependencies."""
+        """Run the agentic session with the given prompt."""
         ...

@@ -35,7 +35,7 @@ from ..adapters.textual_messages import (
 from ..adapters.textual import TextualAgentAdapter
 from ..core.commands import CommandParser, execute_command
 from ..core.provider_loader import load_providers
-from ..core.types import AgentSessionProtocol, CommandType
+from ..core.types import AgentSessionProtocol, CommandType, RunDeps
 
 
 class TextualAgentApp(App):
@@ -84,10 +84,12 @@ class TextualAgentApp(App):
     def __init__(
         self,
         session: AgentSessionProtocol,
+        deps: RunDeps | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._session = session
+        self._deps = deps or RunDeps()
         self._cancellation_event: asyncio.Event | None = None
         self._pending_tool_widgets: dict[str, ToolCallWidget] = {}
 
@@ -142,7 +144,7 @@ class TextualAgentApp(App):
             return
 
         # Execute command and apply effect.
-        effect = execute_command(result)
+        effect = execute_command(result, deps=self._deps)
         if effect is not None:
             input_widget.clear()
             if effect.should_reset_ui:

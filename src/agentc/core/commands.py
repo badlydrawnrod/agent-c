@@ -13,7 +13,7 @@ The module follows an effect-based pattern:
 
 from .factory import create_agent
 from .loop import AgentSession
-from .types import CommandEffect, CommandResult, CommandType, ProviderConfig
+from .types import CommandEffect, CommandResult, CommandType, ProviderConfig, RunDeps
 
 
 class CommandParser:
@@ -95,6 +95,7 @@ class CommandParser:
 def execute_command(
     result: CommandResult,
     provider_name: str | None = None,
+    deps: RunDeps | None = None,
 ) -> CommandEffect | None:
     """Execute a command and return its effect.
 
@@ -113,7 +114,7 @@ def execute_command(
     match result.command_type:
         case CommandType.CLEAR:
             return CommandEffect(
-                new_session=AgentSession(agent=create_agent()),
+                new_session=AgentSession(agent=create_agent(), deps=deps),
                 notification="Conversation cleared",
                 should_reset_ui=True,
             )
@@ -121,7 +122,9 @@ def execute_command(
         case CommandType.PROVIDER_SWITCH:
             provider = result.args.get("provider", provider_name)
             return CommandEffect(
-                new_session=AgentSession(agent=create_agent(provider_name=provider)),
+                new_session=AgentSession(
+                    agent=create_agent(provider_name=provider), deps=deps
+                ),
                 notification=f"Switched to provider: {provider}",
                 should_reset_ui=True,
             )

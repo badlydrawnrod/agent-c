@@ -86,7 +86,6 @@ class ConsoleAgentAdapter:
         """Create the debounced event stream from the session."""
         raw_events = self._session.run(
             prompt=self._prompt,
-            deps=RunDeps(),
             cancellation_event=self._cancellation_event,
         )
         middleware = DebouncingMiddleware(threshold=self._debounce_threshold)

@@ -7,13 +7,17 @@ Textual application.
 
 from ..core.factory import create_agent
 from ..core.loop import AgentSession
+from ..core.types import RunDeps
 from .textual_app import TextualAgentApp
 
 
 def main() -> None:
     """CLI entry point for the Textual UI application."""
-    session = AgentSession(agent=create_agent())
-    app = TextualAgentApp(session=session)
+    from pathlib import Path
+
+    deps = RunDeps(root_paths=[Path.cwd()])
+    session = AgentSession(agent=create_agent(), deps=deps)
+    app = TextualAgentApp(session=session, deps=deps)
     app.run()
 
 
