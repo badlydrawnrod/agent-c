@@ -117,10 +117,10 @@ While in the agent, type:
 ## Skills System
 
 Agent C uses a skills-based approach where skills are discovered from:
-- Project directory: `SKILL.md` files
-- Home directory: `~/.agentc/skills/*.md`
+- Bundled skills: Installed to `~/.local/share/agentc/skills/` (or platform-equivalent user data directory)
+- Project directories: `.github/skills/` and `.claude/skills/`
 
-Skills are injected into the system prompt as a table, allowing the agent to understand available capabilities.
+Each skill is a subdirectory containing a `SKILL.md` file with metadata and usage instructions. Skills are injected into the system prompt as a table, allowing the agent to understand available capabilities.
 
 ## Tools
 

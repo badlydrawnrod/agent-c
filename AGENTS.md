@@ -34,10 +34,11 @@ The project uses an event-driven, layered architecture:
 
 ### Main Implementation (`src/agentc/`)
 Event-driven, layered architecture with:
-- **`core/`**: Agnostic agentic logic (types, event loop, agent factory, tools). `tools.py` uses combined ignore patterns for discovery.
+- **`core/`**: Agnostic agentic logic (types, event loop, agent factory, tools). `tools.py` uses combined ignore patterns for file discovery. `skill_loader.py` discovers `SKILL.md` files from bundled skills (installed to user data directory) and project directories.
 - **`middleware/`**: Cross-cutting concerns (e.g., debouncing)
 - **`adapters/`**: Bridges core event stream to specific frameworks. Owns translation logic and UI-specific message types.
 - **`ui/`**: User interface implementations (Textual TUI, Console)
+- **`skills/`**: Bundled skills (e.g., domino-number-calculator) packaged with the application
 
 ### Legacy Implementation (`src/agentc_legacy/`) - DEPRECATED
 Traditional monolithic agent with file operations, multiple personalities, and CLI interface. Available via `agent-c-legacy` command but will be removed in a future release.
