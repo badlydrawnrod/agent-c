@@ -27,7 +27,7 @@ Framework-specific commands (`/exit`, unknown commands) return `None` and are ha
 
 ## Tools and constraints
 - `list_files`, `glob_paths`, `search_files`, `read_file`, `edit_file` (approval), `run_command` (approval).
-- Paths are resolved relative to the current working directory; attempts to escape raise `ModelRetry`.
+- Paths are resolved relative to the current working directory and the skills directories; attempts to escape raise `ModelRetry`.
 - `read_file` returns `cat -n` style output; `edit_file` enforces a single match, writes atomically, and creates timestamped backups (`.bak`).
 - `glob_paths` and `search_files` respect combined ignore patterns (centralized defaults like `.git/` plus local `.gitignore` rules) and cap output at `MAX_TOOL_OUTPUT_LINES` (200).
 - `run_command` uses asyncio subprocess execution and returns combined stdout/stderr.
