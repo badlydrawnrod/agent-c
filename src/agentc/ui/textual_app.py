@@ -8,7 +8,6 @@ via the `TextualAgentAdapter`. UI widgets are defined in `widgets.py`.
 
 import asyncio
 
-
 from typing import Any
 
 from textual import on, work

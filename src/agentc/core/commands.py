@@ -11,9 +11,26 @@ The module follows an effect-based pattern:
 - UI layer: Applies the effects (framework-specific)
 """
 
+from pathlib import Path
+
 from .factory import create_agent
 from .loop import AgentSession
 from .types import CommandEffect, CommandResult, CommandType, ProviderConfig, RunDeps
+
+
+def _skill_dirs_from_deps(deps: RunDeps | None) -> list[Path] | None:
+    """Derive skill directories from run dependencies.
+
+    The `RunDeps.root_paths` list may include the primary workspace plus
+    additional skill directories. When present, pass the entire list so skills
+    living under the workspace are discoverable. If no roots are provided,
+    return None to allow the factory default.
+    """
+
+    if deps is None or not deps.root_paths:
+        return None
+
+    return deps.root_paths
 
 
 class CommandParser:
@@ -111,10 +128,14 @@ def execute_command(
         CommandEffect describing what should happen, or None if the
         command should be handled directly by the UI layer.
     """
+    skill_dirs = _skill_dirs_from_deps(deps)
+
     match result.command_type:
         case CommandType.CLEAR:
             return CommandEffect(
-                new_session=AgentSession(agent=create_agent(), deps=deps),
+                new_session=AgentSession(
+                    agent=create_agent(skill_dirs=skill_dirs), deps=deps
+                ),
                 notification="Conversation cleared",
                 should_reset_ui=True,
             )
@@ -123,7 +144,8 @@ def execute_command(
             provider = result.args.get("provider", provider_name)
             return CommandEffect(
                 new_session=AgentSession(
-                    agent=create_agent(provider_name=provider), deps=deps
+                    agent=create_agent(provider_name=provider, skill_dirs=skill_dirs),
+                    deps=deps,
                 ),
                 notification=f"Switched to provider: {provider}",
                 should_reset_ui=True,

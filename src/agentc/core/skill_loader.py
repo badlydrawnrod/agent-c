@@ -1,6 +1,11 @@
 import re
+import shutil
+from importlib.resources import as_file, files
 from pathlib import Path
 
+import platformdirs
+
+from .config import DEFAULT_SKILL_DIRS
 from .types import SkillMetadata
 
 class SkillLoader:
@@ -24,6 +29,26 @@ class SkillLoader:
                         if skill:
                             skills.append(skill)
         return skills
+
+    def get_default_skill_dirs(self) -> list[Path]:
+        """Get the default list of skill directories, installing them if necessary."""
+        return [self._install_default_skills()] + DEFAULT_SKILL_DIRS
+
+    def _install_default_skills(self) -> Path:
+        """Install the default configuration for Agent C Next."""
+        dirs = platformdirs.PlatformDirs(
+            appname="agentc", appauthor="badlydrawnrod", ensure_exists=True
+        )
+        config_path = Path(dirs.user_data_path)
+
+        skills_path = config_path / "skills"
+        skills_path.mkdir(parents=True, exist_ok=True)
+
+        bundled_skills_dir = files("agentc") / "skills"
+        with as_file(bundled_skills_dir) as src_path:
+            shutil.copytree(src_path, skills_path, dirs_exist_ok=True)
+
+        return skills_path
 
     def get_skills_summary(self, skills: list[SkillMetadata]) -> str:
         """Get a markdown table summary of available skills."""

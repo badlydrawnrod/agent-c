@@ -4,12 +4,8 @@ Agent factory for Agent C Next.
 This module assembles the agent using tools from `tools.py` and types from `types.py`.
 """
 
-from importlib.resources import files, as_file
 from pathlib import Path
-import shutil
 from typing import Union
-
-import platformdirs
 
 from pydantic_ai import (
     Agent,
@@ -17,7 +13,7 @@ from pydantic_ai import (
     Tool,
 )
 
-from .config import DEFAULT_SKILL_DIRS, DEFAULT_PROVIDER
+from .config import DEFAULT_PROVIDER
 from .tools import (
     list_files,
     glob_paths,
@@ -33,29 +29,13 @@ from .provider_loader import load_providers, build_model
 
 
 
-def _install_default_skills() -> Path:
-    """Install the default configuration for Agent C Next."""
-    dirs = platformdirs.PlatformDirs(
-        appname="agentc", appauthor="badlydrawnrod", ensure_exists=True
-    )
-    config_path = Path(dirs.user_data_path)
-
-    skills_path = config_path / "skills"
-    skills_path.mkdir(parents=True, exist_ok=True)
-
-    bundled_skills_dir = files("agentc") / "skills"
-    with as_file(bundled_skills_dir) as src_path:
-        shutil.copytree(src_path, skills_path, dirs_exist_ok=True)
-
-    return skills_path
-
-
 def create_agent(
     skill_dirs: list[Path] | None = None, provider_name: str | None = None
 ) -> NextAgent:
     """Factory function to create a configured agent instance."""
+    loader = SkillLoader()
     if skill_dirs is None:
-        skill_dirs = [_install_default_skills()] + DEFAULT_SKILL_DIRS
+        skill_dirs = loader.get_default_skill_dirs()
 
     providers = load_providers()
     name = provider_name or DEFAULT_PROVIDER
@@ -77,7 +57,6 @@ def create_agent(
     ]
 
     # Dynamically load skills
-    loader = SkillLoader()
     discovered_skills = loader.discover_skills(skill_dirs)
     skills_summary = loader.get_skills_summary(discovered_skills)
 

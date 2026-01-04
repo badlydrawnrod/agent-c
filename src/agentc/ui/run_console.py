@@ -20,6 +20,7 @@ from ..adapters.console_messages import (
 )
 from ..core.factory import create_agent
 from ..core.loop import AgentSession
+from ..core.skill_loader import SkillLoader
 from ..core.types import ApprovalResponse, RunDeps
 
 
@@ -82,9 +83,12 @@ async def run_console_ui() -> None:
     """Run the console UI using the ConsoleAgentAdapter."""
     from pathlib import Path
 
+    loader = SkillLoader()
+    skill_dirs = loader.get_default_skill_dirs()
+
     # Setup agent using the factory
-    deps = RunDeps(root_paths=[Path.cwd()])
-    agent = create_agent()
+    deps = RunDeps(root_paths=[Path.cwd()] + skill_dirs)
+    agent = create_agent(skill_dirs=deps.root_paths)
     session = AgentSession(agent=agent, deps=deps)
 
     prompt = "List the files in the current directory and then read README.md"

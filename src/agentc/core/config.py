@@ -21,7 +21,6 @@ TEMP_SUFFIX: str = ".tmp"
 DEFAULT_SKILL_DIRS: list[Path] = [
     Path(".github/skills"),
     Path(".claude/skills"),
-    Path("skills"),
 ]
 
 # Default ignore patterns for file discovery (glob, search)

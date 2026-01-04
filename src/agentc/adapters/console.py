@@ -16,7 +16,6 @@ from ..core.types import (
     AgentSessionProtocol,
     ApprovalRequest,
     ApprovalResponse,
-    RunDeps,
     ToolCallInfo,
     ToolCallResultInfo,
 )
