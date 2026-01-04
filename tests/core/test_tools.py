@@ -17,7 +17,7 @@ def _chdir_tmp(tmp_path, monkeypatch):
 def mock_ctx(tmp_path):
     """Create a mock RunContext with allowed root paths."""
     ctx = MagicMock(spec=RunContext)
-    ctx.deps = RunDeps(root_paths=[tmp_path])
+    ctx.deps = RunDeps(root_dirs=[tmp_path])
     return ctx
 
 

@@ -26,7 +26,7 @@ def workspace(tmp_path, monkeypatch):
 
 def create_mock_context(workspace) -> RunContext[RunDeps]:
     ctx = MagicMock(spec=RunContext)
-    ctx.deps = RunDeps(root_paths=[workspace])
+    ctx.deps = RunDeps(root_dirs=[workspace])
     return ctx
 
 def test_defaults_ignored_in_glob(workspace):

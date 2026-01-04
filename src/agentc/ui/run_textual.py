@@ -19,8 +19,8 @@ def main() -> None:
     loader = SkillLoader()
     skill_dirs = loader.get_default_skill_dirs()
 
-    deps = RunDeps(root_paths=[Path.cwd()] + skill_dirs)
-    session = AgentSession(agent=create_agent(skill_dirs=deps.root_paths), deps=deps)
+    deps = RunDeps(root_dirs=[Path.cwd()], skill_dirs=skill_dirs)
+    session = AgentSession(agent=create_agent(skill_dirs=deps.skill_dirs), deps=deps)
     app = TextualAgentApp(session=session, deps=deps)
     app.run()
 

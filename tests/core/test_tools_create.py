@@ -6,7 +6,7 @@ from agentc.core.types import RunDeps
 
 def create_mock_context(tmp_path) -> RunContext[RunDeps]:
     ctx = MagicMock(spec=RunContext)
-    ctx.deps = RunDeps(root_paths=[tmp_path])
+    ctx.deps = RunDeps(root_dirs=[tmp_path])
     return ctx
 
 def test_create_file_success(tmp_path):

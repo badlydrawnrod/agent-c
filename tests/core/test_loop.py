@@ -74,7 +74,7 @@ def create_mock_approval_result(tool_name: str, tool_id: str) -> MagicMock:
 async def _test_agent_session_history():
     """Test that AgentSession maintains conversation history."""
     agent = MagicMock(spec=NextAgent)
-    deps = RunDeps(root_paths=[])
+    deps = RunDeps(root_dirs=[])
     session = AgentSession(agent=agent, deps=deps)
     
     # Initially empty
@@ -101,7 +101,7 @@ async def _test_agent_session_run_text():
     agent.run_stream_events = mock_run_stream_events
     
     # Run session and collect events
-    deps = RunDeps(root_paths=[])
+    deps = RunDeps(root_dirs=[])
     session = AgentSession(agent=agent, deps=deps)
     gen = session.run("Hi")
     
@@ -141,7 +141,7 @@ async def _test_agent_session_run_approval_handshake():
     agent.run_stream_events = mock_run_stream_events
     
     # Run session with manual async iteration for handshake
-    deps = RunDeps(root_paths=[])
+    deps = RunDeps(root_dirs=[])
     session = AgentSession(agent=agent, deps=deps)
     gen = session.run("Run tool")
     
@@ -177,7 +177,7 @@ async def _test_agent_session_run_tool_call():
     agent.run_stream_events = mock_run_stream_events
     
     # Run session and collect events
-    deps = RunDeps(root_paths=[])
+    deps = RunDeps(root_dirs=[])
     session = AgentSession(agent=agent, deps=deps)
     gen = session.run("Use tool")
     
@@ -228,7 +228,7 @@ async def _test_agent_session_run_tool_result():
     agent.run_stream_events = mock_run_stream_events
     
     # Run session and collect events
-    deps = RunDeps(root_paths=[])
+    deps = RunDeps(root_dirs=[])
     session = AgentSession(agent=agent, deps=deps)
     gen = session.run("Use tool")
     

@@ -24,7 +24,7 @@ def _resolve_path(path_str: str, deps: RunDeps, *, must_exist: bool = True) -> P
     """Resolve a path safely, ensuring it is within one of the allowed root paths."""
     candidate = Path(path_str).expanduser().resolve(strict=False)
 
-    for root in deps.root_paths:
+    for root in deps.root_dirs:
         if candidate.is_relative_to(root.resolve()):
             if must_exist and not candidate.exists():
                 raise ModelRetry(f"Path does not exist: {path_str}")

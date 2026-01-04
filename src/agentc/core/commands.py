@@ -21,16 +21,15 @@ from .types import CommandEffect, CommandResult, CommandType, ProviderConfig, Ru
 def _skill_dirs_from_deps(deps: RunDeps | None) -> list[Path] | None:
     """Derive skill directories from run dependencies.
 
-    The `RunDeps.root_paths` list may include the primary workspace plus
-    additional skill directories. When present, pass the entire list so skills
-    living under the workspace are discoverable. If no roots are provided,
-    return None to allow the factory default.
+    The `RunDeps.skill_dirs` list includes directories to scan for skills.
+    Tools are restricted to `RunDeps.root_dirs`, which automatically
+    includes `skill_dirs` during initialization.
     """
 
-    if deps is None or not deps.root_paths:
+    if deps is None or not deps.skill_dirs:
         return None
 
-    return deps.root_paths
+    return deps.skill_dirs
 
 
 class CommandParser:

@@ -87,8 +87,8 @@ async def run_console_ui() -> None:
     skill_dirs = loader.get_default_skill_dirs()
 
     # Setup agent using the factory
-    deps = RunDeps(root_paths=[Path.cwd()] + skill_dirs)
-    agent = create_agent(skill_dirs=deps.root_paths)
+    deps = RunDeps(root_dirs=[Path.cwd()], skill_dirs=skill_dirs)
+    agent = create_agent(skill_dirs=deps.skill_dirs)
     session = AgentSession(agent=agent, deps=deps)
 
     prompt = "List the files in the current directory and then read README.md"

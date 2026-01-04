@@ -19,10 +19,10 @@ from agentc.core.types import RunDeps, ToolResult
 from pydantic_ai import ModelRetry, RunContext
 
 
-def create_mock_context(root_paths: list[Path] | None = None) -> RunContext[RunDeps]:
+def create_mock_context(root_dirs: list[Path] | None = None) -> RunContext[RunDeps]:
     """Create a mock RunContext for testing."""
     ctx = MagicMock(spec=RunContext)
-    ctx.deps = RunDeps(root_paths=root_paths or [])
+    ctx.deps = RunDeps(root_dirs=root_dirs or [])
     return ctx
 
 
