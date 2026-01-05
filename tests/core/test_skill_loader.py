@@ -85,3 +85,24 @@ def test_get_skills_summary():
     # Check for normalized doc path
     assert "`path/to/skill1/SKILL.md`" in summary.replace("\\", "/")
     assert "\\" not in summary
+
+def test_get_default_skill_dirs(tmp_path):
+    loader = SkillLoader()
+    
+    # Mock Path.home() and platformdirs
+    with patch("pathlib.Path.home", return_value=tmp_path / "home"), \
+         patch("platformdirs.PlatformDirs") as mock_dirs:
+        
+        # Setup mock_dirs
+        mock_instance = mock_dirs.return_value
+        mock_instance.user_data_path = str(tmp_path / "appdata")
+        
+        # We also need to avoid the actual bundled skills installation which uses importlib.resources
+        with patch.object(loader, "_install_default_skills", return_value=tmp_path / "bundled"):
+            dirs = loader.get_default_skill_dirs()
+            
+            # Should have: [bundled, user, .github/skills, .claude/skills]
+            assert len(dirs) == 4
+            user_skill_dir = (tmp_path / "home" / ".agentc" / "skills")
+            assert user_skill_dir in dirs
+            assert user_skill_dir.exists()

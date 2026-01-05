@@ -32,7 +32,13 @@ class SkillLoader:
 
     def get_default_skill_dirs(self) -> list[Path]:
         """Get the default list of skill directories, installing them if necessary."""
-        return [self._install_default_skills()] + DEFAULT_SKILL_DIRS
+        return [self._install_default_skills(), self.get_user_skill_dir()] + DEFAULT_SKILL_DIRS
+
+    def get_user_skill_dir(self) -> Path:
+        """Get the user-defined, repository-independent skill directory."""
+        path = Path.home() / ".agentc" / "skills"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
     def _install_default_skills(self) -> Path:
         """Install the default configuration for Agent C Next."""
