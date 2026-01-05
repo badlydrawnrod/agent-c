@@ -1,5 +1,5 @@
 ---
-name: dominino-number-calculator
+name: domino-number-calculator
 description: Calculates the nth entry in the Domino sequence. Use this when asked to calculate Domino numbers.
 ---
 # Domino Calculation with Python
