@@ -7,7 +7,7 @@ adapters, and the UI, helping to prevent circular dependencies and architectural
 from __future__ import annotations
 
 from asyncio import Event
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncGenerator, Protocol
@@ -79,7 +79,31 @@ class SkillMetadata:
 class RunDeps:
     """Dependencies for the agent run context."""
 
-    pass
+    root_dirs: list[Path] = field(default_factory=list)
+    skill_dirs: list[Path] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        """Consolidate root_dirs and skill_dirs.
+
+        Removes redundant paths (descendants) and duplicates.
+        Ensures skill_dirs are included in root_dirs so tools can access them.
+        """
+        # Ensure all skill_dirs are covered by root_dirs
+        self.root_dirs.extend(self.skill_dirs)
+
+        self.root_dirs = self._consolidate_paths(self.root_dirs)
+        self.skill_dirs = self._consolidate_paths(self.skill_dirs)
+
+    def _consolidate_paths(self, paths: list[Path]) -> list[Path]:
+        if not paths:
+            return []
+        # Resolve, remove duplicates, and sort by length (shallowest first)
+        resolved = sorted({p.resolve() for p in paths}, key=lambda p: len(p.parts))
+        unique: list[Path] = []
+        for p in resolved:
+            if not any(p.is_relative_to(parent) for parent in unique):
+                unique.append(p)
+        return unique
 
 
 type NextAgent = Agent[RunDeps, str | DeferredToolRequests]
@@ -154,8 +178,7 @@ class AgentSessionProtocol(Protocol):
     def run(
         self,
         prompt: str,
-        deps: RunDeps,
         cancellation_event: Event | None = None,
     ) -> AgentEventStream:
-        """Run the agentic session with the given prompt and dependencies."""
+        """Run the agentic session with the given prompt."""
         ...

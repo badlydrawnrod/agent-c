@@ -1,8 +1,8 @@
-You are an automated code assistant working on Agent C Next in a Python 3.13+ repo. Follow these rules exactly when producing code changes.
+You are an automated code assistant working on Agent C in a Python 3.13+ repo. Follow these rules exactly when producing code changes.
 
 You must preserve the repo's layered, strongly-typed architecture.
 
-### Package Structure (`src/agentc_next/`)
+### Package Structure (`src/agentc/`)
 - **`core/`**: Agnostic logic.
   - `types.py`: Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done), `AgentSessionProtocol`, and shared dataclasses. Also defines `CommandEffect` for effect-based command execution.
   - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs). Must be UI-agnostic.
@@ -10,8 +10,9 @@ You must preserve the repo's layered, strongly-typed architecture.
   - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the provider and model configured in `providers.toml` (the repo default is `ollama`), plus the shared toolset and skills table.
   - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`). Commands produce pure `CommandEffect` data; UIs apply effects.
   - `tool_parsing.py`: Robust JSON/dict argument handling for tool calls.
-  - `tools.py`: Concrete tool implementations (`list_files`, `glob_paths`, `search_files`, `read_file`, `edit_file`, `run_command`).
-  - `skill_loader.py`: Discovers `SKILL.md` skills under configured directories and renders a skills table for the system prompt.
+  - `tools.py`: Concrete tool implementations (`list_files`, `glob_paths`, `search_files`, `read_file`, `edit_file`, `create_file`, `run_command`).
+  - `skill_loader.py`: Discovers `SKILL.md` skills from bundled skills (installed to user data directory) and project directories (`.github/skills`, `.claude/skills` by default) and renders a skills table for the system prompt.
+  - `provider_loader.py`: Loads provider configurations from `providers.toml` and builds model instances.
 - **`middleware/`**: Cross-cutting concerns.
   - `debouncing.py`: `DebouncingMiddleware` for text/thinking delta aggregation (default threshold 40 chars).
 - **`adapters/`**: Bridging core logic to specific frameworks.
@@ -19,26 +20,27 @@ You must preserve the repo's layered, strongly-typed architecture.
   - `console.py`: `ConsoleAgentAdapter` translating `AgentEvent` to console callbacks.
   - `textual_messages.py`: Textual-specific `Message` types (e.g., `AgentText`, `AgentApprovalRequest`).
   - `console_messages.py`: Console event dataclasses.
-- **`ui/`**: User interface entry points and applications. `textual_app.py` and `widgets.py` define the Textual interface.
+- **`ui/`**: User interface entry points and applications.
   - `textual_app.py`: The main Textual `App` implementation.
   - `widgets.py`: Reusable UI components (status bar, approval forms, etc.).
   - `run_textual.py`: Launcher for the Textual UI.
   - `run_console.py`: Launcher for the Console UI demo (auto-approval sample prompt).
+- **`skills/`**: Bundled skills packaged with the application, copied to user data directory on first run.
 
 ### Current implementation snapshot
 - Event flow: `AgentSession.run()` streams pydantic_ai parts, maps them to `AgentEvent`, and supports tool call results alongside tool call announcements.
 - Debouncing: `DebouncingMiddleware` buffers short text/thinking deltas but lets tool calls, tool results, approvals, and completion events pass through immediately.
 - Command execution: Effect-based pattern separates command logic from UI. `CommandParser.parse()` returns `CommandResult`; `execute_command()` produces `CommandEffect` (pure data); UI layer applies effects. Commands like `/clear` and `/provider <name>` are handled generically; framework-specific commands (`/exit`, unknown commands) are handled directly by the UI.
-- Tools: All file ops are confined to the working tree, `read_file` emits `cat -n` formatting, `edit_file` enforces a single match and writes atomically with `.bak` backups, and `run_command` plus `edit_file` require approval. `glob_paths` and `search_files` respect combined ignore patterns (defaults like `.git/` plus `.gitignore`).
-- Skills: `SkillLoader` scans `.github/skills` and `.claude/skills` by default and injects a skills table plus usage guidance into the system prompt.
-- Model defaults: provider and model are loaded from `src/agentc_next/providers.toml` via `provider_loader.load_providers()` and `provider_loader.build_model()`; the repo default provider is `ollama` (see `core/config.py`), which maps to an Ollama-backed model in `providers.toml` (for example `gpt-oss:120b-cloud` at `http://localhost:11434/v1`).
+- Tools: All file ops are confined to the working tree, `read_file` emits `cat -n` formatting, `edit_file` enforces a single match and writes atomically with `.bak` backups, and `run_command` plus `edit_file` plus `create_file` require approval. `glob_paths` and `search_files` respect combined ignore patterns (defaults like `.git/` plus `.gitignore`).
+- Skills: `SkillLoader` discovers bundled skills (installed to user data directory) and project skills (`.github/skills` and `.claude/skills` by default) and injects a skills table plus usage guidance into the system prompt.
+- Model defaults: provider and model are loaded from `src/agentc/providers.toml` via `provider_loader.load_providers()` and `provider_loader.build_model()`; the repo default provider is `ollama` (see `core/config.py`), which maps to an Ollama-backed model in `providers.toml` (for example `gpt-oss:120b-cloud` at `http://localhost:11434/v1`).
 
 ### Rules (strict)
 - **Layers**: types (core) / loop / middleware / adapter / UI. State the layer(s) you change **before** modifying code.
 - **Cross-layer types**: If data flows across layers, add a typed dataclass to `src/agentc_next/core/types.py`. No cross-layer imports from `core` to `ui`.
 - **Handshake**: The `AgentSession.run` loop is a bidirectional async generator yielding `AgentEvent` and receiving `ApprovalResponse` via `asend`. Preserve this explicit handshake.
 - **Typing & style**: All new or modified public functions must have full type annotations and docstrings. Use `Protocol` for interfaces, `TypeAlias` for complex types, and `@dataclass` for event/value objects.
-- **Tests (Mandatory)**: Maintain and update the test suite in `tests/agentc_next/`. Covering:
+- **Tests (Mandatory)**: Maintain and update the test suite in `tests/agentc/`. Covering:
   - `core.loop`: `test_loop.py` (handshake, history, tool call yielding).
   - `core.factory`: `test_factory.py` (agent creation).
   - `core.commands`: `test_commands.py` (command parsing and effect-based execution).
@@ -55,6 +57,6 @@ In your reply include:
 2) Full file contents or unified diffs for each changed file.
 3) Test file path(s) and test contents.
 4) One-line commit message and a brief summary explaining how layering was preserved.
-5) PR checklist status: run `uv run ruff check`, `uv run mypy`, and `uv run pytest tests/agentc_next/`.
+5) PR checklist status: run `uv run ruff check`, `uv run mypy`, and `uv run pytest tests/core/ tests/middleware/ tests/adapters/`.
 
 Deliver only the requested items. Do not add unrelated refactors or features.

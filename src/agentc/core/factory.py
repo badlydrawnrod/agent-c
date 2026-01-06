@@ -4,6 +4,7 @@ Agent factory for Agent C Next.
 This module assembles the agent using tools from `tools.py` and types from `types.py`.
 """
 
+from pathlib import Path
 from typing import Union
 
 from pydantic_ai import (
@@ -12,8 +13,7 @@ from pydantic_ai import (
     Tool,
 )
 
-from pathlib import Path
-from .config import DEFAULT_SKILL_DIRS, DEFAULT_PROVIDER
+from .config import DEFAULT_PROVIDER
 from .tools import (
     list_files,
     glob_paths,
@@ -28,12 +28,14 @@ from .types import RunDeps, NextAgent
 from .provider_loader import load_providers, build_model
 
 
+
 def create_agent(
     skill_dirs: list[Path] | None = None, provider_name: str | None = None
 ) -> NextAgent:
     """Factory function to create a configured agent instance."""
+    loader = SkillLoader()
     if skill_dirs is None:
-        skill_dirs = [Path(p) for p in DEFAULT_SKILL_DIRS]
+        skill_dirs = loader.get_default_skill_dirs()
 
     providers = load_providers()
     name = provider_name or DEFAULT_PROVIDER
@@ -55,7 +57,6 @@ def create_agent(
     ]
 
     # Dynamically load skills
-    loader = SkillLoader()
     discovered_skills = loader.discover_skills(skill_dirs)
     skills_summary = loader.get_skills_summary(discovered_skills)
 
@@ -89,21 +90,6 @@ By default, use ASCII encoding. Only introduce non-ASCII or Unicode characters i
 Always explain why non-ASCII characters are necessary.
 
 ## Agent Skills Library
-You have access to specialized skills—pre-built scripts for complex tasks like linting, testing, or deployment. These are documented in the repository and listed below.
-
-**How to Use Skills**:
-1. **Discover**: Check the skills summary table below for relevant capabilities
-2. **Read Documentation**: Use `read_file` on the "Documentation Path" to understand parameters
-3. **Execute**: Change to the skill's "Base Directory" before running
-
-**CRITICAL RULES - Skills**:
-- **NO IMPROVISATION**: Always use provided skill scripts exactly as documented—never write your own
-- **DIRECTORY CONTEXT MATTERS**: Skills must run from their base directory
-  - Platform-specific command patterns:
-    - POSIX/cmd.exe: `run_command(command="cd <Base Directory> && <command>")`
-    - PowerShell: `run_command(command="Set-Location '<Base Directory>'; if ($?) {{<command>}}")`
-- **STRICT PATHS**: Use exact paths from documentation—do not guess file locations
-
 {skills_summary}
 
 ## Success Criteria

@@ -19,10 +19,10 @@ from agentc.core.types import RunDeps, ToolResult
 from pydantic_ai import ModelRetry, RunContext
 
 
-def create_mock_context() -> RunContext[RunDeps]:
+def create_mock_context(root_dirs: list[Path] | None = None) -> RunContext[RunDeps]:
     """Create a mock RunContext for testing."""
     ctx = MagicMock(spec=RunContext)
-    ctx.deps = RunDeps()
+    ctx.deps = RunDeps(root_dirs=root_dirs or [])
     return ctx
 
 
@@ -59,7 +59,7 @@ class TestListFiles:
         original_cwd = os.getcwd()
         try:
             os.chdir(tmp_path)
-            ctx = create_mock_context()
+            ctx = create_mock_context([tmp_path])
             result = list_files(ctx, ".")
 
             assert isinstance(result, ToolResult)
@@ -75,7 +75,7 @@ class TestListFiles:
         original_cwd = os.getcwd()
         try:
             os.chdir(tmp_path)
-            ctx = create_mock_context()
+            ctx = create_mock_context([tmp_path])
             result = list_files(ctx, ".")
 
             assert isinstance(result, ToolResult)
@@ -108,7 +108,7 @@ class TestGlobPaths:
         original_cwd = os.getcwd()
         try:
             os.chdir(tmp_path)
-            ctx = create_mock_context()
+            ctx = create_mock_context([tmp_path])
             result = glob_paths(ctx, "*.txt", ".")
 
             assert isinstance(result, ToolResult)
@@ -126,7 +126,7 @@ class TestGlobPaths:
         original_cwd = os.getcwd()
         try:
             os.chdir(tmp_path)
-            ctx = create_mock_context()
+            ctx = create_mock_context([tmp_path])
             result = glob_paths(ctx, "*.xyz", ".")
 
             assert isinstance(result, ToolResult)
@@ -147,7 +147,7 @@ class TestSearchFiles:
         original_cwd = os.getcwd()
         try:
             os.chdir(tmp_path)
-            ctx = create_mock_context()
+            ctx = create_mock_context([tmp_path])
             result = search_files(ctx, "hello", ".")
 
             assert isinstance(result, ToolResult)
@@ -165,7 +165,7 @@ class TestSearchFiles:
         original_cwd = os.getcwd()
         try:
             os.chdir(tmp_path)
-            ctx = create_mock_context()
+            ctx = create_mock_context([tmp_path])
             result = search_files(ctx, "xyz", ".")
 
             assert isinstance(result, ToolResult)
@@ -186,7 +186,7 @@ class TestReadFile:
         original_cwd = os.getcwd()
         try:
             os.chdir(tmp_path)
-            ctx = create_mock_context()
+            ctx = create_mock_context([tmp_path])
             result = read_file(ctx, "test.txt")
 
             assert isinstance(result, ToolResult)
@@ -220,7 +220,7 @@ class TestEditFile:
         original_cwd = os.getcwd()
         try:
             os.chdir(tmp_path)
-            ctx = create_mock_context()
+            ctx = create_mock_context([tmp_path])
             result = edit_file(ctx, "test.txt", "original", "modified")
 
             assert isinstance(result, ToolResult)
@@ -238,7 +238,7 @@ class TestEditFile:
         original_cwd = os.getcwd()
         try:
             os.chdir(tmp_path)
-            ctx = create_mock_context()
+            ctx = create_mock_context([tmp_path])
             try:
                 result = edit_file(ctx, "test.txt", "notfound", "replacement")
                 assert result.success is False

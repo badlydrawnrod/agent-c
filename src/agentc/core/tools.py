@@ -20,16 +20,17 @@ from .config import (
 from .types import RunDeps, ToolResult
 
 
-def _resolve_path(path_str: str, *, must_exist: bool = True) -> Path:
-    """Resolve a path relative to the current working directory safely."""
-    base_dir = Path.cwd().resolve()
-    candidate = (base_dir / Path(path_str).expanduser()).resolve(strict=False)
+def _resolve_path(path_str: str, deps: RunDeps, *, must_exist: bool = True) -> Path:
+    """Resolve a path safely, ensuring it is within one of the allowed root paths."""
+    candidate = Path(path_str).expanduser().resolve(strict=False)
 
-    if must_exist and not candidate.exists():
-        raise ModelRetry(f"Path does not exist: {path_str}")
-    if not candidate.is_relative_to(base_dir):
-        raise ModelRetry(f"Path is outside the working directory: {path_str}")
-    return candidate
+    for root in deps.root_dirs:
+        if candidate.is_relative_to(root.resolve()):
+            if must_exist and not candidate.exists():
+                raise ModelRetry(f"Path does not exist: {path_str}")
+            return candidate
+
+    raise ModelRetry(f"Path is outside allowed directories: {path_str}")
 
 
 def _format_error(tool_name: str, message: str) -> str:
@@ -86,7 +87,7 @@ def list_files(ctx: RunContext[RunDeps], path: str = ".") -> ToolResult:
     - Returns one entry per line, sorted case-insensitively; directories are suffixed with "/".
     """
     try:
-        target = _resolve_path(path)
+        target = _resolve_path(path, ctx.deps)
         if not target.is_dir():
             raise ModelRetry(f"Path must be a directory: {path}")
 
@@ -113,7 +114,7 @@ def glob_paths(ctx: RunContext[RunDeps], pattern: str, path: str = ".") -> ToolR
     - Caps results at MAX_TOOL_OUTPUT_LINES; if truncated, a summary line is appended.
     """
     try:
-        base = _resolve_path(path)
+        base = _resolve_path(path, ctx.deps)
         if not base.is_dir():
             raise ModelRetry(f"Path must be a directory: {path}")
 
@@ -158,7 +159,7 @@ def search_files(ctx: RunContext[RunDeps], query: str, path: str = ".") -> ToolR
     - If no matches are found, returns "No matches.".
     """
     try:
-        base = _resolve_path(path)
+        base = _resolve_path(path, ctx.deps)
         if not base.is_dir():
             raise ModelRetry(f"Path must be a directory: {path}")
 
@@ -210,7 +211,7 @@ def read_file(ctx: RunContext[RunDeps], path: str) -> ToolResult:
     - Raises ModelRetry for invalid paths, directories, or non-UTF-8 content.
     """
     try:
-        target = _resolve_path(path)
+        target = _resolve_path(path, ctx.deps)
         if target.is_dir():
             raise ModelRetry(f"Path must be a file, not a directory: {path}")
 
@@ -234,7 +235,7 @@ def edit_file(ctx: RunContext[RunDeps], path: str, old_str: str, new_str: str) -
     - Returns a short success or error message; on error, backup name is included when available.
     """
     try:
-        target = _resolve_path(path)
+        target = _resolve_path(path, ctx.deps)
         if target.is_dir():
             raise ModelRetry(f"Path must be a file, not a directory: {path}")
 
@@ -273,7 +274,7 @@ def create_file(ctx: RunContext[RunDeps], path: str, content: str) -> ToolResult
     - Writes atomically via a temp file.
     """
     try:
-        target = _resolve_path(path, must_exist=False)
+        target = _resolve_path(path, ctx.deps, must_exist=False)
         if target.exists():
             raise ModelRetry(f"File already exists: {path}. Use edit_file to modify it.")
 

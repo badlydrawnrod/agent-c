@@ -11,9 +11,25 @@ The module follows an effect-based pattern:
 - UI layer: Applies the effects (framework-specific)
 """
 
+from pathlib import Path
+
 from .factory import create_agent
 from .loop import AgentSession
-from .types import CommandEffect, CommandResult, CommandType, ProviderConfig
+from .types import CommandEffect, CommandResult, CommandType, ProviderConfig, RunDeps
+
+
+def _skill_dirs_from_deps(deps: RunDeps | None) -> list[Path] | None:
+    """Derive skill directories from run dependencies.
+
+    The `RunDeps.skill_dirs` list includes directories to scan for skills.
+    Tools are restricted to `RunDeps.root_dirs`, which automatically
+    includes `skill_dirs` during initialization.
+    """
+
+    if deps is None or not deps.skill_dirs:
+        return None
+
+    return deps.skill_dirs
 
 
 class CommandParser:
@@ -95,6 +111,7 @@ class CommandParser:
 def execute_command(
     result: CommandResult,
     provider_name: str | None = None,
+    deps: RunDeps | None = None,
 ) -> CommandEffect | None:
     """Execute a command and return its effect.
 
@@ -110,10 +127,14 @@ def execute_command(
         CommandEffect describing what should happen, or None if the
         command should be handled directly by the UI layer.
     """
+    skill_dirs = _skill_dirs_from_deps(deps)
+
     match result.command_type:
         case CommandType.CLEAR:
             return CommandEffect(
-                new_session=AgentSession(agent=create_agent()),
+                new_session=AgentSession(
+                    agent=create_agent(skill_dirs=skill_dirs), deps=deps
+                ),
                 notification="Conversation cleared",
                 should_reset_ui=True,
             )
@@ -121,7 +142,10 @@ def execute_command(
         case CommandType.PROVIDER_SWITCH:
             provider = result.args.get("provider", provider_name)
             return CommandEffect(
-                new_session=AgentSession(agent=create_agent(provider_name=provider)),
+                new_session=AgentSession(
+                    agent=create_agent(provider_name=provider, skill_dirs=skill_dirs),
+                    deps=deps,
+                ),
                 notification=f"Switched to provider: {provider}",
                 should_reset_ui=True,
             )

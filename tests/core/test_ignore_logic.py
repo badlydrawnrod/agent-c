@@ -1,5 +1,8 @@
+from unittest.mock import MagicMock
 import pytest
+from pydantic_ai import RunContext
 from agentc.core.tools import glob_paths, search_files
+from agentc.core.types import RunDeps
 
 @pytest.fixture
 def workspace(tmp_path, monkeypatch):
@@ -21,9 +24,15 @@ def workspace(tmp_path, monkeypatch):
     
     return tmp_path
 
+def create_mock_context(workspace) -> RunContext[RunDeps]:
+    ctx = MagicMock(spec=RunContext)
+    ctx.deps = RunDeps(root_dirs=[workspace])
+    return ctx
+
 def test_defaults_ignored_in_glob(workspace):
     """Verify .git and __pycache__ are ignored by default in glob."""
-    result = glob_paths(None, "**/*", path=".")
+    ctx = create_mock_context(workspace)
+    result = glob_paths(ctx, "**/*", path=".")
     lines = result.content.splitlines()
     
     # Should show src/ and README.md, but NOT .git or __pycache__
@@ -35,21 +44,23 @@ def test_defaults_ignored_in_glob(workspace):
 
 def test_defaults_ignored_in_search(workspace):
     """Verify .git contents are not searched."""
+    ctx = create_mock_context(workspace)
     # Search for 'git' which is in .git/config
-    result = search_files(None, "git", path=".")
+    result = search_files(ctx, "git", path=".")
     
     # Should not find anything in .git
     assert result.content == "No matches."
     
     # Verify it finds content in README
-    result = search_files(None, "Project", path=".")
+    result = search_files(ctx, "Project", path=".")
     assert "README.md:1: # Project" in result.content
 
 def test_gitignore_still_respected(workspace):
     """Verify .gitignore patterns are combined with defaults."""
+    ctx = create_mock_context(workspace)
     (workspace / ".gitignore").write_text("src/\n", encoding="utf-8")
     
-    result = glob_paths(None, "**/*", path=".")
+    result = glob_paths(ctx, "**/*", path=".")
     lines = result.content.splitlines()
     
     # src/ should now be ignored due to .gitignore

@@ -55,9 +55,11 @@ class AgentSession(AgentSessionProtocol):
         self,
         agent: NextAgent,
         history: list[Any] | None = None,
+        deps: RunDeps | None = None,
     ):
         self._agent = agent
         self._history = history or []
+        self._deps = deps or RunDeps()
 
     @property
     def history(self) -> list[Any]:
@@ -166,11 +168,10 @@ class AgentSession(AgentSessionProtocol):
     async def run(
         self,
         prompt: str,
-        deps: RunDeps,
         cancellation_event: asyncio.Event | None = None,
     ) -> AgentEventStream:
         """
-        Run the agentic session with the given prompt and dependencies.
+        Run the agentic session with the given prompt.
 
         Async generator that runs the agent and yields event types from types.py.
         """
@@ -185,7 +186,7 @@ class AgentSession(AgentSessionProtocol):
                 current_prompt,
                 message_history=self._history,
                 deferred_tool_results=approval_results,
-                deps=deps,
+                deps=self._deps,
             ):
                 if self._is_cancelled(cancellation_event):
                     return
