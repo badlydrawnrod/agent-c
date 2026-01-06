@@ -31,8 +31,16 @@ class SkillLoader:
         return skills
 
     def get_default_skill_dirs(self) -> list[Path]:
-        """Get the default list of skill directories, installing them if necessary."""
-        return [self._install_default_skills(), self.get_user_skill_dir()] + DEFAULT_SKILL_DIRS
+        """Get the default list of skill directories, installing them if necessary.
+
+        Skills are loaded in priority order:
+        1. Repo skills (e.g., .github/skills, .claude/skills)
+        2. User skills ($HOME/.agentc/skills)
+        3. Built-in skills (bundled with the package)
+
+        Skills discovered earlier take precedence over later ones.
+        """
+        return DEFAULT_SKILL_DIRS + [self.get_user_skill_dir(), self._install_default_skills()]
 
     def get_user_skill_dir(self) -> Path:
         """Get the user-defined, repository-independent skill directory."""

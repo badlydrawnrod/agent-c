@@ -105,8 +105,15 @@ def test_get_default_skill_dirs(tmp_path):
         with patch.object(loader, "_install_default_skills", return_value=tmp_path / "bundled"):
             dirs = loader.get_default_skill_dirs()
             
-            # Should have: [bundled, user, .github/skills, .claude/skills]
+            # Should have: [.github/skills, .claude/skills, user, bundled]
+            # Order: repo skills first, then user skills, then built-in
             assert len(dirs) == 4
             user_skill_dir = (tmp_path / "home" / ".agentc" / "skills")
             assert user_skill_dir in dirs
             assert user_skill_dir.exists()
+            
+            # Verify ordering: repo skills before user skills before bundled
+            from agentc.core.config import DEFAULT_SKILL_DIRS
+            assert dirs[:2] == DEFAULT_SKILL_DIRS  # repo skills first
+            assert dirs[2] == user_skill_dir  # user skills second
+            assert dirs[3] == tmp_path / "bundled"  # built-in last
