@@ -57,32 +57,27 @@ class SkillLoader:
         return skills_path
 
     def get_skills_summary(self, skills: list[SkillMetadata]) -> str:
-        """Get a markdown table summary of available skills."""
+        """Get a markdown table summary of available skills, prefixed with instructions on how to use them."""
         if not skills:
             return "No specialized skills available."
-            
+
         lines = [
-            "| Skill Name | Description | Base Directory | Documentation Path |",
-            "| :--- | :--- | :--- | :--- |"
+            "You have access to specialized skills.",
+            "",
+            "**How to Use Skills**:",
+            "1. **Discover**: Check the skills summary table below for relevant capabilities",
+            "2. **Read Documentation**: Use `read_file` on the `File` to get full instructions on how to use the skill",
+            "3. **Run the skill**: If the skill mentions a script then run it with `run_command`",
+            "",
+            "| Name | Description | File |",
+            "| :--- | :--- | :--- |",
         ]
         for skill in skills:
-            # Generate normalized relative paths using forward slashes for the LLM
-            try:
-                abs_base = skill.path.resolve()
-                abs_skill_file = (skill.path / "SKILL.md").resolve()
-                abs_cwd = Path.cwd().resolve()
-                
-                rel_base = abs_base.relative_to(abs_cwd)
-                rel_doc = abs_skill_file.relative_to(abs_cwd)
-            except ValueError:
-                rel_base = skill.path
-                rel_doc = skill.path / "SKILL.md"
-            
+            skill_file = (skill.path / "SKILL.md").resolve()
             # Forward slashes are safer for LLMs and work cross-platform in Python
-            base_str = str(rel_base).replace("\\", "/")
-            doc_str = str(rel_doc).replace("\\", "/")
-            lines.append(f"| {skill.name} | {skill.description} | `{base_str}` | `{doc_str}` |")
-        
+            file_str = str(skill_file).replace("\\", "/")
+            lines.append(f"| {skill.name} | {skill.description} | `{file_str}` |")
+
         return "\n".join(lines)
 
     def _parse_skill(self, skill_file: Path) -> SkillMetadata | None:

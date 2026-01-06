@@ -90,21 +90,6 @@ By default, use ASCII encoding. Only introduce non-ASCII or Unicode characters i
 Always explain why non-ASCII characters are necessary.
 
 ## Agent Skills Library
-You have access to specialized skills—pre-built scripts for complex tasks like linting, testing, or deployment. These are documented in the repository and listed below.
-
-**How to Use Skills**:
-1. **Discover**: Check the skills summary table below for relevant capabilities
-2. **Read Documentation**: Use `read_file` on the "Documentation Path" to understand parameters
-3. **Execute**: Change to the skill's "Base Directory" before running
-
-**CRITICAL RULES - Skills**:
-- **NO IMPROVISATION**: Always use provided skill scripts exactly as documented—never write your own
-- **DIRECTORY CONTEXT MATTERS**: Skills must run from their base directory
-  - Platform-specific command patterns:
-    - POSIX/cmd.exe: `run_command(command="cd <Base Directory> && <command>")`
-    - PowerShell: `run_command(command="Set-Location '<Base Directory>'; if ($?) {{<command>}}")`
-- **STRICT PATHS**: Use exact paths from documentation—do not guess file locations
-
 {skills_summary}
 
 ## Success Criteria

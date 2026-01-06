@@ -76,14 +76,18 @@ def test_get_skills_summary():
             body=""
         )
     ]
-    
+
     summary = loader.get_skills_summary(skills)
-    assert "| Skill Name | Description | Base Directory | Documentation Path |" in summary
+    # Check for the instruction line
+    assert "**How to Use Skills**:" in summary
+    assert "Check the skills summary table below" in summary
+    assert "Use `read_file` on the `File`" in summary
+    # Check for the simplified header
+    assert "| Name | Description | File |" in summary
+    # Check skill entries exist with full absolute paths
     assert "| skill1 | Desc 1 |" in summary
-    # Check for normalized base directory
-    assert "`path/to/skill1`" in summary.replace("\\", "/")
-    # Check for normalized doc path
-    assert "`path/to/skill1/SKILL.md`" in summary.replace("\\", "/")
+    assert "| skill2 | Desc 2 |" in summary
+    # Check that paths use forward slashes
     assert "\\" not in summary
 
 def test_get_default_skill_dirs(tmp_path):
