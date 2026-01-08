@@ -65,6 +65,17 @@ def test_parse_case_insensitivity(parser):
     assert result.command_type == CommandType.PROVIDER_SWITCH
     assert result.args["provider"] == "anthropic"
 
+def test_parse_help(parser):
+    for cmd in ["/help", "/?"]:
+        result = parser.parse(cmd)
+        assert result.command_type == CommandType.HELP
+
+def test_command_metadata_structure():
+    from agentc.core.commands import COMMAND_METADATA
+    for cmd in COMMAND_METADATA:
+        assert "command" in cmd
+        assert "description" in cmd
+
 
 # --- Tests for execute_command ---
 
@@ -115,3 +126,14 @@ class TestExecuteCommand:
         effect = execute_command(result)
 
         assert effect is None
+
+    def test_execute_help_returns_effect(self):
+        """HELP command should return effect with notification listing commands."""
+        result = CommandResult(CommandType.HELP, {})
+        effect = execute_command(result)
+
+        assert effect is not None
+        assert "Available Commands" in effect.notification
+        assert "/clear" in effect.notification
+        assert "/help" in effect.notification
+        assert effect.should_reset_ui is False

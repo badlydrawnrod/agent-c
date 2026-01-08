@@ -6,16 +6,19 @@ and the history-enabled text area.
 """
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Button, Static, TextArea
 
 from ..adapters.textual_messages import AgentApprovalRequestMessage
+from ..core.commands import COMMAND_METADATA
 
 __all__ = [
     "StatusBar",
     "ApprovalWidget",
     "ToolCallWidget",
     "HistoryTextArea",
+    "CommandSuggestions",
 ]
 
 # UI Animation constants
@@ -211,12 +214,109 @@ class ToolCallWidget(Static):
         self.border_title = f"Tool: {self.tool_name} ✗{error_text}"
 
 
+class CommandSuggestions(Static):
+    """A floating suggestion list for commands with theme-aware styling."""
+
+    DEFAULT_CSS = """
+    CommandSuggestions {
+        background: $surface;
+        border: round $accent;
+        height: auto;
+        max-height: 8;
+        width: 100%;
+        display: none;
+        padding: 0 1;
+        margin-bottom: 1;
+    }
+    CommandSuggestions.visible {
+        display: block;
+    }
+    CommandSuggestions .suggestion-line {
+        height: 1;
+        color: $text-muted;
+        padding: 0 1;
+    }
+    CommandSuggestions .suggestion-line.selected {
+        background: $accent;
+        color: $text;
+        text-style: bold;
+    }
+    CommandSuggestions .cmd-name {
+        color: $primary;
+        text-style: bold;
+    }
+    CommandSuggestions .cmd-desc {
+        color: $text-muted;
+    }
+    CommandSuggestions .glyph {
+        color: $accent;
+        text-style: bold;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.suggestions: list[dict[str, str]] = []
+        self.selected_index: int = 0
+        self.border_title = "Commands"
+
+    def set_suggestions(self, suggestions: list[dict[str, str]]) -> None:
+        self.suggestions = suggestions
+        self.selected_index = 0
+        self._update_display()
+        if suggestions:
+            self.add_class("visible")
+        else:
+            self.remove_class("visible")
+
+    def _update_display(self) -> None:
+        if not self.suggestions:
+            self.update("")
+            return
+
+        from rich.text import Text
+
+        content = Text()
+        for i, cmd in enumerate(self.suggestions):
+            is_selected = i == self.selected_index
+            
+            # Glyph indicator
+            glyph = "▸ " if is_selected else "  "
+            content.append(glyph, style="bold" if is_selected else "dim")
+            
+            # Command name
+            content.append(cmd["command"], style="bold" if is_selected else "")
+            
+            # Description
+            content.append(f"  {cmd['description']}", style="" if is_selected else "dim")
+            
+            if i < len(self.suggestions) - 1:
+                content.append("\n")
+        
+        self.update(content)
+
+    def move_selection(self, delta: int) -> None:
+        if not self.suggestions:
+            return
+        self.selected_index = (self.selected_index + delta) % len(self.suggestions)
+        self._update_display()
+
+    @property
+    def selected_command(self) -> str | None:
+        if self.suggestions and 0 <= self.selected_index < len(self.suggestions):
+            return self.suggestions[self.selected_index]["command"]
+        return None
+
+
+
 class HistoryTextArea(TextArea):
-    """TextArea with command history support."""
+    """TextArea with command history support and slash-command autocomplete."""
 
     BINDINGS = [
         ("up", "history_up", "History Up"),
         ("down", "history_down", "History Down"),
+        Binding("tab", "complete_command", "Complete", show=False),
+        Binding("escape", "hide_suggestions", "Hide", show=False),
     ]
 
     def __init__(self, **kwargs):
@@ -224,8 +324,52 @@ class HistoryTextArea(TextArea):
         self.command_history: list[str] = []
         self.history_index: int | None = None
         self.current_draft: str = ""
+        self._suggestions_widget: CommandSuggestions | None = None
+
+    def on_mount(self) -> None:
+        # Try to find suggestions widget in parents or app
+        self._suggestions_widget = self.app.query_one(
+            "#suggestions", CommandSuggestions
+        )
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        if not self._suggestions_widget:
+            return
+
+        text = self.text
+        if text.startswith("/") and "\n" not in text:
+            # Filter commands
+            prefix = text.lower()
+            matches = [
+                cmd
+                for cmd in COMMAND_METADATA
+                if cmd["command"].startswith(prefix)
+                or any(alias.startswith(prefix) for alias in cmd.get("aliases", "").split(", "))
+            ]
+            self._suggestions_widget.set_suggestions(matches)
+        else:
+            self._suggestions_widget.set_suggestions([])
+
+    def action_complete_command(self) -> None:
+        if self._suggestions_widget and self._suggestions_widget.has_class("visible"):
+            cmd = self._suggestions_widget.selected_command
+            if cmd:
+                self.load_text(cmd + " ")
+                self.move_cursor_to_end()
+                self._suggestions_widget.set_suggestions([])
+        else:
+            # Fallback to default tab behavior if no suggestions
+            self.insert("\t")
+
+    def action_hide_suggestions(self) -> None:
+        if self._suggestions_widget:
+            self._suggestions_widget.set_suggestions([])
 
     def action_history_up(self) -> None:
+        if self._suggestions_widget and self._suggestions_widget.has_class("visible"):
+            self._suggestions_widget.move_selection(-1)
+            return
+
         if self.cursor_location[0] == 0:
             if not self.command_history:
                 return
@@ -241,6 +385,10 @@ class HistoryTextArea(TextArea):
             self.action_cursor_up()
 
     def action_history_down(self) -> None:
+        if self._suggestions_widget and self._suggestions_widget.has_class("visible"):
+            self._suggestions_widget.move_selection(1)
+            return
+
         last_line_idx = self.document.line_count - 1
         if self.cursor_location[0] == last_line_idx:
             if self.history_index is None:

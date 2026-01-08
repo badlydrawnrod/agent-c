@@ -34,6 +34,7 @@ class CommandType(Enum):
     CLEAR = "clear"  # Clear conversation context
     EXIT = "exit"  # Exit application
     PROVIDER_SWITCH = "switch"  # Switch to different provider
+    HELP = "help"  # Show available commands
     UNKNOWN = "unknown"  # Unknown command (error)
 
 

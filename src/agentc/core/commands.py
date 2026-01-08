@@ -17,6 +17,29 @@ from .factory import create_agent
 from .loop import AgentSession
 from .types import CommandEffect, CommandResult, CommandType, ProviderConfig, RunDeps
 
+COMMAND_METADATA: list[dict[str, str]] = [
+    {
+        "command": "/clear",
+        "aliases": "/reset",
+        "description": "Clear conversation history",
+    },
+    {
+        "command": "/exit",
+        "aliases": "/quit, /bye",
+        "description": "Exit the application",
+    },
+    {
+        "command": "/provider",
+        "args": "<name>",
+        "description": "Switch LLM provider",
+    },
+    {
+        "command": "/help",
+        "aliases": "",
+        "description": "Show available commands",
+    },
+]
+
 
 def _skill_dirs_from_deps(deps: RunDeps | None) -> list[Path] | None:
     """Derive skill directories from run dependencies.
@@ -78,6 +101,10 @@ class CommandParser:
         # Check for clear commands
         if command in ("/clear", "/reset"):
             return CommandResult(CommandType.CLEAR, {})
+
+        # Check for help commands
+        if command in ("/help", "/?"):
+            return CommandResult(CommandType.HELP, {})
 
         # Check for provider switch command
         parts = command.split(maxsplit=1)
@@ -148,6 +175,22 @@ def execute_command(
                 ),
                 notification=f"Switched to provider: {provider}",
                 should_reset_ui=True,
+            )
+
+        case CommandType.HELP:
+            help_lines = ["Available Commands:"]
+            for cmd in COMMAND_METADATA:
+                line = f"- {cmd['command']}"
+                if cmd.get("args"):
+                    line += f" {cmd['args']}"
+                if cmd.get("aliases"):
+                    line += f" (aliases: {cmd['aliases']})"
+                line += f": {cmd['description']}"
+                help_lines.append(line)
+
+            return CommandEffect(
+                notification="\n".join(help_lines),
+                should_reset_ui=False,
             )
 
         case _:

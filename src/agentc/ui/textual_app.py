@@ -17,6 +17,7 @@ from textual.widgets import Collapsible, Footer, Markdown, Static, TextArea
 
 from .widgets import (
     ApprovalWidget,
+    CommandSuggestions,
     HistoryTextArea,
     StatusBar,
     ToolCallWidget,
@@ -114,6 +115,7 @@ class TextualAgentApp(App):
         with VerticalScroll(id="scroll"):
             pass
         yield StatusBar(id="status")
+        yield CommandSuggestions(id="suggestions")
         input_widget = HistoryTextArea(
             placeholder="Type here (multi-line supported). Use Ctrl+Enter to submit.",
             id="input",
