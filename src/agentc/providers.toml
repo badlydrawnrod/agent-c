@@ -8,7 +8,7 @@ model_name = "claude-sonnet-4-5"
 provider_cls = "pydantic_ai.providers.google.GoogleProvider"
 model_cls = "pydantic_ai.models.google.GoogleModel"
 api_key_env = "GOOGLE_API_KEY"
-model_name = "gemini-1.5-pro"
+model_name = "gemini-3-flash-preview"
 
 [huggingface]
 provider_cls = "pydantic_ai.providers.openai.OpenAIProvider"

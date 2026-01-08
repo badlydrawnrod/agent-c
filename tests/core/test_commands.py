@@ -79,12 +79,16 @@ def test_command_metadata_structure():
 
 # --- Tests for execute_command ---
 
+from unittest.mock import patch, MagicMock
 
 class TestExecuteCommand:
     """Tests for the execute_command function."""
 
-    def test_execute_clear_returns_effect(self):
+    @patch("agentc.core.commands.create_agent")
+    def test_execute_clear_returns_effect(self, mock_create_agent):
         """CLEAR command should return effect with new session and notification."""
+        mock_create_agent.return_value = MagicMock()
+        
         result = CommandResult(CommandType.CLEAR, {})
         effect = execute_command(result)
 
@@ -92,9 +96,13 @@ class TestExecuteCommand:
         assert effect.new_session is not None
         assert effect.notification == "Conversation cleared"
         assert effect.should_reset_ui is True
+        mock_create_agent.assert_called_once()
 
-    def test_execute_provider_switch_returns_effect(self):
+    @patch("agentc.core.commands.create_agent")
+    def test_execute_provider_switch_returns_effect(self, mock_create_agent):
         """PROVIDER_SWITCH command should return effect with new session."""
+        mock_create_agent.return_value = MagicMock()
+
         result = CommandResult(CommandType.PROVIDER_SWITCH, {"provider": "anthropic"})
         effect = execute_command(result)
 
@@ -102,6 +110,10 @@ class TestExecuteCommand:
         assert effect.new_session is not None
         assert effect.notification == "Switched to provider: anthropic"
         assert effect.should_reset_ui is True
+        
+        # Verify create_agent was called with correct provider
+        call_kwargs = mock_create_agent.call_args.kwargs
+        assert call_kwargs.get("provider_name") == "anthropic"
 
     def test_execute_exit_returns_none(self):
         """EXIT command should return None (handled by UI)."""

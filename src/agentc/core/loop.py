@@ -87,7 +87,9 @@ class AgentSession(AgentSessionProtocol):
             case PartDeltaEvent(delta=TextPartDelta(content_delta=text)):
                 return AgentChunk(content=text, is_thought=False)
 
-            case PartDeltaEvent(delta=ThinkingPartDelta(content_delta=thought)) if thought:
+            case PartDeltaEvent(
+                delta=ThinkingPartDelta(content_delta=thought)
+            ) if thought:
                 return AgentChunk(content=thought, is_thought=True)
 
         return None
@@ -107,20 +109,24 @@ class AgentSession(AgentSessionProtocol):
 
     def _map_tool_result(self, event: Any) -> ToolCallResultInfo | None:
         """Map a Pydantic AI FunctionToolResultEvent to an agnostic ToolCallResultInfo."""
-        match event:
-            case FunctionToolResultEvent(
-                result=ToolReturnPart(tool_call_id=call_id, content=content)
-            ):
-                match content:
-                    case ToolResult() as tr:
-                        return ToolCallResultInfo(tool_call_id=call_id, result=tr)
-                    case {"success": success, "content": c} as d:
-                        return ToolCallResultInfo(
-                            tool_call_id=call_id,
-                            result=ToolResult(
-                                success=success, content=c, error=d.get("error")
-                            ),
-                        )
+        if not isinstance(event, FunctionToolResultEvent):
+            return None
+
+        if not isinstance(event.result, ToolReturnPart):
+            return None
+
+        call_id = event.result.tool_call_id
+        content = event.result.content
+
+        match content:
+            case ToolResult() as tr:
+                return ToolCallResultInfo(tool_call_id=call_id, result=tr)
+            case {"success": success, "content": c} as d:
+                return ToolCallResultInfo(
+                    tool_call_id=call_id,
+                    result=ToolResult(success=success, content=c, error=d.get("error")),
+                )
+
         return None
 
     def _is_cancelled(self, cancellation_event: asyncio.Event | None) -> bool:

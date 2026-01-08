@@ -1,5 +1,7 @@
 import pytest
 from pathlib import Path
+from unittest.mock import patch, MagicMock
+import os
 from agentc.core.provider_loader import load_providers, build_model
 from agentc.core.types import ProviderConfig
 from pydantic_ai.models.openai import OpenAIChatModel
@@ -31,6 +33,40 @@ def test_build_model_ollama():
     assert isinstance(provider, OllamaProvider)
     assert isinstance(model, OpenAIChatModel)
     assert model.model_name == ollama_config.model_name
+
+def test_build_model_with_api_key():
+    """Verify that API key is retrieved from environment and passed to provider."""
+    config = ProviderConfig(
+        name="test_openai",
+        provider_cls_path="pydantic_ai.providers.openai.OpenAIProvider",
+        model_cls_path="pydantic_ai.models.openai.OpenAIChatModel",
+        model_name="gpt-4o",
+        api_key_env="TEST_OPENAI_API_KEY"
+    )
+
+    with patch.dict(os.environ, {"TEST_OPENAI_API_KEY": "sk-test-key-123"}), \
+         patch("agentc.core.provider_loader._get_class") as mock_get_class:
+        
+        # Mock the provider and model classes
+        mock_provider_cls = MagicMock()
+        mock_model_cls = MagicMock()
+        
+        # Configure _get_class to return our mocks
+        def get_class_side_effect(path):
+            if path == config.provider_cls_path:
+                return mock_provider_cls
+            if path == config.model_cls_path:
+                return mock_model_cls
+            return MagicMock()
+            
+        mock_get_class.side_effect = get_class_side_effect
+        
+        provider, model = build_model(config)
+        
+        # Verify provider was initialized with correct api_key
+        mock_provider_cls.assert_called_once()
+        call_kwargs = mock_provider_cls.call_args.kwargs
+        assert call_kwargs.get("api_key") == "sk-test-key-123"
 
 def test_load_providers_file_not_found():
     """Verify behavior when config file is missing."""

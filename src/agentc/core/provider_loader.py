@@ -6,6 +6,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
+import os
 import tomllib
 
 from .types import ProviderConfig
@@ -66,7 +67,9 @@ def build_model(config: ProviderConfig) -> tuple[Any, Any]:
 
     provider_kwargs = {}
     if config.api_key_env:
-        provider_kwargs["api_key"] = config.api_key_env
+        api_key = os.getenv(config.api_key_env)
+        if api_key:
+            provider_kwargs["api_key"] = api_key
     if config.base_url:
         provider_kwargs["base_url"] = config.base_url
 
