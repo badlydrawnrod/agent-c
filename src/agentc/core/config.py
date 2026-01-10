@@ -34,3 +34,8 @@ DEFAULT_IGNORE_PATTERNS: list[str] = [
 ]
 # Default provider from providers.toml
 DEFAULT_PROVIDER: str = "ollama"
+
+# Default provider discovery paths (relative to working directory)
+DEFAULT_PROVIDER_DIRS: list[Path] = [
+    Path(".agentc"),
+]
