@@ -11,7 +11,7 @@ You must preserve the repo's layered, strongly-typed architecture.
   - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`). Commands produce pure `CommandEffect` data; UIs apply effects.
   - `tool_parsing.py`: Robust JSON/dict argument handling for tool calls.
   - `tools.py`: Concrete tool implementations (`list_files`, `glob_paths`, `search_files`, `read_file`, `edit_file`, `create_file`, `run_command`).
-  - `skill_loader.py`: Discovers `SKILL.md` skills from bundled skills (installed to user data directory) and project directories (`.github/skills`, `.claude/skills` by default) and renders a skills table for the system prompt.
+  - `skill_loader.py`: Discovers `SKILL.md` skills from project directories (`.github/skills`, `.claude/skills`), user directory (`~/.agentc/skills`), and bundled skills (installed to platform-specific user data directory). Earlier directories take precedence.
   - `provider_loader.py`: Discovers, loads, and merges `providers.toml` files from repo/user/bundled locations (priority: repo > user > bundled). Dynamically imports provider/model classes and builds instances with API keys, base URLs, and model params.
     - `get_default_provider_dirs()`: Returns discovery paths in priority order (`.agentc/`, `~/.agentc/`, bundled)
     - `load_providers(dirs)`: Merges backend and model preset configs with precedence (earlier overrides later)
@@ -35,7 +35,7 @@ You must preserve the repo's layered, strongly-typed architecture.
 - Debouncing: `DebouncingMiddleware` buffers short text/thinking deltas but lets tool calls, tool results, approvals, and completion events pass through immediately.
 - Command execution: Effect-based pattern separates command logic from UI. `CommandParser.parse()` returns `CommandResult`; `execute_command()` produces `CommandEffect` (pure data); UI layer applies effects. Commands like `/clear` and `/model <name>` are handled generically; framework-specific commands (`/exit`, unknown commands) are handled directly by the UI.
 - Tools: All file ops are confined to the working tree, `read_file` emits `cat -n` formatting, `edit_file` enforces a single match and writes atomically with `.bak` backups, and `run_command` plus `edit_file` plus `create_file` require approval. `glob_paths` and `search_files` respect combined ignore patterns (defaults like `.git/` plus `.gitignore`).
-- Skills: `SkillLoader` discovers bundled skills (installed to user data directory) and project skills (`.github/skills` and `.claude/skills` by default) and injects a skills table plus usage guidance into the system prompt.
+- Skills: `SkillLoader` discovers skills from project directories (`.github/skills`, `.claude/skills`), user directory (`~/.agentc/skills`), and bundled skills (installed to user data directory). Returns all discovered skills (no precedence filtering) and injects a skills table plus usage guidance into the system prompt.
 - Model defaults: backends and models are loaded from `src/agentc/providers.toml` via `provider_loader.load_providers()` and `provider_loader.build_model()`; the repo default model preset is `local-oss` (see `core/config.py`), which maps to an Ollama-backed model string in `providers.toml` (for example `gpt-oss:120b-cloud` at `http://localhost:11434/v1`).
 
 ### Rules (strict)

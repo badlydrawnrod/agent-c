@@ -16,7 +16,7 @@ Hugely inspired by [How to Build an Agent](https://ampcode.com/how-to-build-an-a
 
 ## Prerequisites
 
-- [Python](https://www.python.org/) 3.13 or higher
+- [Python](https://www.python.org/) 3.13 or higher (note: `uv sync` will install it if necessary)
 - [`uv`](https://docs.astral.sh/uv/) package manager
 - An LLM provider (Ollama, OpenAI, Anthropic, etc.)
 
@@ -184,25 +184,14 @@ Agent C provides these tools to assist with coding tasks:
 ## Project Structure
 
 ```
-├── src/
-│   ├── agentc/               # Main Implementation
-│   │   ├── core/             # Agnostic agent logic
-│   │   ├── middleware/       # Cross-cutting concerns (debouncing)
-│   │   ├── adapters/         # UI framework bridges
-│   │   ├── ui/               # User interfaces (Textual, Console)
-│   │   └── providers.toml    # Provider configuration
-│   └── agentc_legacy/        # Legacy Implementation (DEPRECATED)
-│       └── ...               # Use agent-c-legacy command
+└── src/
+    └── agentc/               # Main Implementation
+        ├── core/             # Agnostic agent logic
+        ├── middleware/       # Cross-cutting concerns (debouncing)
+        ├── adapters/         # UI framework bridges
+        ├── ui/               # User interfaces (Textual, Console)
+        └── providers.toml    # Provider configuration
 ```
-
-## Legacy Support
-
-The previous personality-based implementation is still available via:
-```bash
-uv run agent-c-legacy --personality coder
-```
-
-This legacy implementation will be removed in a future release. Users are encouraged to migrate to the skills-based approach.
 
 ## Development
 

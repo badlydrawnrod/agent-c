@@ -38,10 +38,7 @@ Event-driven, layered architecture with:
 - **`middleware/`**: Cross-cutting concerns (e.g., debouncing)
 - **`adapters/`**: Bridges core event stream to specific frameworks. Owns translation logic and UI-specific message types.
 - **`ui/`**: User interface implementations (Textual TUI, Console)
-- **`skills/`**: Bundled skills (e.g., domino-number-calculator) packaged with the application
-
-### Legacy Implementation (`src/agentc_legacy/`) - DEPRECATED
-Traditional monolithic agent with file operations, multiple personalities, and CLI interface. Available via `agent-c-legacy` command but will be removed in a future release.
+- **`skills/`**: Bundled skills (e.g., fibonacci-number) packaged with the application
 
 ## Code Style & Architecture Rules
 
@@ -154,4 +151,3 @@ When contributing to `agentc`:
   - `agentc.ui.run_textual:main` (agent-c command - default Textual UI)
   - `agentc.ui.run_console:main` (run-console command)
   - `agentc.ui.run_textual:main` (run-textual command)
-  - `agentc_legacy.agent:main` (agent-c-legacy command - deprecated)

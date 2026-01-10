@@ -21,7 +21,6 @@ source = { editable = "." }
 dependencies = [
     { name = "pathspec" },
     { name = "platformdirs" },
-    { name = "prompt-toolkit" },
     { name = "pydantic-ai" },
     { name = "textual" },
 ]
@@ -38,7 +37,6 @@ dev = [
 requires-dist = [
     { name = "pathspec", specifier = ">=0.12.1" },
     { name = "platformdirs", specifier = ">=4.5.0" },
-    { name = "prompt-toolkit", specifier = ">=3.0.52" },
     { name = "pydantic-ai", specifier = ">=1.6.0" },
     { name = "textual", specifier = ">=6.7.0" },
 ]
