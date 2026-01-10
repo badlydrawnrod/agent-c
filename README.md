@@ -59,7 +59,7 @@ uv sync
 
 Agent C uses a single TOML configuration file (located in `src/agentc/`):
 
-- **`providers.toml`**: Configure all supported LLM providers (Ollama, Anthropic, OpenAI, etc.)
+- **`providers.toml`**: Configure backends and model presets (Ollama, Anthropic, OpenAI, etc.)
 
 ### Setting API Keys
 
@@ -78,9 +78,9 @@ export ANTHROPIC_API_KEY=your_key
 
 Ollama requires no API key but must be running locally.
 
-### Custom Providers
+### Custom Backends and Models
 
-Agent C supports custom provider configurations via `providers.toml` files discovered in priority order:
+Agent C supports custom backend/model configurations via `providers.toml` files discovered in priority order:
 
 1. **Repo-local**: `.agentc/providers.toml` (highest priority)
 2. **User-global**: `~/.agentc/providers.toml`
@@ -88,33 +88,41 @@ Agent C supports custom provider configurations via `providers.toml` files disco
 
 Providers discovered earlier override those with the same name in later locations.
 
-#### Example Custom Provider
+#### Example Custom Backend + Model
 
 Create `.agentc/providers.toml` in your project or `~/.agentc/providers.toml` in your home directory:
 
 ```toml
-[my-custom-ollama]
+[backends.my-custom-ollama]
 provider_cls = "pydantic_ai.providers.ollama.OllamaProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
-model_name = "deepseek-r1:32b"
 base_url = "http://localhost:11434/v1"
 
-[my-openai]
+[backends.openai]
 provider_cls = "pydantic_ai.providers.openai.OpenAIProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
-model_name = "gpt-4o"
 api_key_env = "OPENAI_API_KEY"
+
+[models.local-dev]
+backend = "my-custom-ollama"
+model_name = "deepseek-r1:32b"
+params = {temperature = 0.2}
+
+[models.gpt-4o]
+backend = "openai"
+model_name = "gpt-4o"
 ```
 
 - `provider_cls`: Full Python path to the provider class
 - `model_cls`: Full Python path to the model class
 - `model_name`: Model identifier (e.g., `gpt-4o`, `deepseek-r1:32b`)
 - `api_key_env`: (Optional) Environment variable name for API key
-- `base_url`: (Optional) Custom base URL for the provider
+- `base_url`: (Optional) Custom base URL for the backend
+- `params`: (Optional) Keyword arguments forwarded to the model constructor (e.g., `temperature`)
 
-Switch to your custom provider:
+Switch to your custom model preset:
 ```
-/provider my-custom-ollama
+/model local-dev
 ```
 
 ## Running the Agent
@@ -131,14 +139,14 @@ uv run agent-c
 uv run run-console
 ```
 
-### Override the Provider
+### Override the Model Preset
 
-Use the `/provider` command within the agent:
+Use the `/model` command within the agent:
 ```
-/provider anthropic
+/model claude-sonnet
 ```
 
-Available providers: `anthropic`, `google`, `huggingface`, `mistral`, `ollama`, `openai`
+Available presets (bundled): `local-oss`, `gpt-4o-mini`, `claude-sonnet`, `gemini-flash`, `hf-gpt-oss-120b`, `mistral-large`
 
 ### Run Without Installing
 
@@ -150,7 +158,7 @@ uvx --from . agent-c
 
 While in the agent, type:
 - `/clear` or `/reset`: Clear conversation history
-- `/provider <name>`: Switch to a different provider
+- `/model <name>`: Switch to a different model preset
 - `/quit` or `/exit`: Exit the agent
 
 ## Skills System

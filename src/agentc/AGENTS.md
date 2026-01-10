@@ -4,18 +4,18 @@ You must preserve the repo's layered, strongly-typed architecture.
 
 ### Package Structure (`src/agentc/`)
 - **`core/`**: Agnostic logic.
-  - `types.py`: Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done), `AgentSessionProtocol`, and shared dataclasses. Also defines `CommandEffect` for effect-based command execution. Includes `ProviderConfig` for provider configuration.
-  - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs, `DEFAULT_PROVIDER`, `DEFAULT_PROVIDER_DIRS`). Must be UI-agnostic.
+  - `types.py`: Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done), `AgentSessionProtocol`, and shared dataclasses. Also defines `CommandEffect` for effect-based command execution, plus `BackendConfig` and `ModelConfig` for backend/model presets.
+  - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs, `DEFAULT_MODEL`, `DEFAULT_PROVIDER_DIRS`). Must be UI-agnostic.
   - `loop.py`: `AgentSession` implementing the bidirectional async generator loop and mapping pydantic_ai events to `AgentEvent`.
-  - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the provider and model configured in `providers.toml` (the repo default is `ollama`), plus the shared toolset and skills table.
+  - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the model preset configured in `providers.toml` (repo default preset is `local-oss` on the `ollama` backend), plus the shared toolset and skills table.
   - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`). Commands produce pure `CommandEffect` data; UIs apply effects.
   - `tool_parsing.py`: Robust JSON/dict argument handling for tool calls.
   - `tools.py`: Concrete tool implementations (`list_files`, `glob_paths`, `search_files`, `read_file`, `edit_file`, `create_file`, `run_command`).
   - `skill_loader.py`: Discovers `SKILL.md` skills from bundled skills (installed to user data directory) and project directories (`.github/skills`, `.claude/skills` by default) and renders a skills table for the system prompt.
-  - `provider_loader.py`: Discovers, loads, and merges `providers.toml` files from repo/user/bundled locations (priority: repo > user > bundled). Dynamically imports provider/model classes and builds instances with API keys and base URLs.
+  - `provider_loader.py`: Discovers, loads, and merges `providers.toml` files from repo/user/bundled locations (priority: repo > user > bundled). Dynamically imports provider/model classes and builds instances with API keys, base URLs, and model params.
     - `get_default_provider_dirs()`: Returns discovery paths in priority order (`.agentc/`, `~/.agentc/`, bundled)
-    - `load_providers(dirs)`: Merges provider configs with precedence (earlier overrides later)
-    - `build_model(config)`: Instantiates provider and model, passes `api_key` from env and `base_url`
+    - `load_providers(dirs)`: Merges backend and model preset configs with precedence (earlier overrides later)
+    - `build_model(model_config, backend_config)`: Instantiates provider and model, passes merged params plus api key/base URL overrides
 - **`middleware/`**: Cross-cutting concerns.
   - `debouncing.py`: `DebouncingMiddleware` for text/thinking delta aggregation (default threshold 40 chars).
 - **`adapters/`**: Bridging core logic to specific frameworks.
@@ -33,10 +33,10 @@ You must preserve the repo's layered, strongly-typed architecture.
 ### Current implementation snapshot
 - Event flow: `AgentSession.run()` streams pydantic_ai parts, maps them to `AgentEvent`, and supports tool call results alongside tool call announcements.
 - Debouncing: `DebouncingMiddleware` buffers short text/thinking deltas but lets tool calls, tool results, approvals, and completion events pass through immediately.
-- Command execution: Effect-based pattern separates command logic from UI. `CommandParser.parse()` returns `CommandResult`; `execute_command()` produces `CommandEffect` (pure data); UI layer applies effects. Commands like `/clear` and `/provider <name>` are handled generically; framework-specific commands (`/exit`, unknown commands) are handled directly by the UI.
+- Command execution: Effect-based pattern separates command logic from UI. `CommandParser.parse()` returns `CommandResult`; `execute_command()` produces `CommandEffect` (pure data); UI layer applies effects. Commands like `/clear` and `/model <name>` are handled generically; framework-specific commands (`/exit`, unknown commands) are handled directly by the UI.
 - Tools: All file ops are confined to the working tree, `read_file` emits `cat -n` formatting, `edit_file` enforces a single match and writes atomically with `.bak` backups, and `run_command` plus `edit_file` plus `create_file` require approval. `glob_paths` and `search_files` respect combined ignore patterns (defaults like `.git/` plus `.gitignore`).
 - Skills: `SkillLoader` discovers bundled skills (installed to user data directory) and project skills (`.github/skills` and `.claude/skills` by default) and injects a skills table plus usage guidance into the system prompt.
-- Model defaults: provider and model are loaded from `src/agentc/providers.toml` via `provider_loader.load_providers()` and `provider_loader.build_model()`; the repo default provider is `ollama` (see `core/config.py`), which maps to an Ollama-backed model in `providers.toml` (for example `gpt-oss:120b-cloud` at `http://localhost:11434/v1`).
+- Model defaults: backends and models are loaded from `src/agentc/providers.toml` via `provider_loader.load_providers()` and `provider_loader.build_model()`; the repo default model preset is `local-oss` (see `core/config.py`), which maps to an Ollama-backed model string in `providers.toml` (for example `gpt-oss:120b-cloud` at `http://localhost:11434/v1`).
 
 ### Rules (strict)
 - **Layers**: types (core) / loop / middleware / adapter / UI. State the layer(s) you change **before** modifying code.
