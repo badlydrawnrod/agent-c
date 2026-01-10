@@ -78,6 +78,45 @@ export ANTHROPIC_API_KEY=your_key
 
 Ollama requires no API key but must be running locally.
 
+### Custom Providers
+
+Agent C supports custom provider configurations via `providers.toml` files discovered in priority order:
+
+1. **Repo-local**: `.agentc/providers.toml` (highest priority)
+2. **User-global**: `~/.agentc/providers.toml`
+3. **Bundled**: `src/agentc/providers.toml` (lowest priority)
+
+Providers discovered earlier override those with the same name in later locations.
+
+#### Example Custom Provider
+
+Create `.agentc/providers.toml` in your project or `~/.agentc/providers.toml` in your home directory:
+
+```toml
+[my-custom-ollama]
+provider_cls = "pydantic_ai.providers.ollama.OllamaProvider"
+model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
+model_name = "deepseek-r1:32b"
+base_url = "http://localhost:11434/v1"
+
+[my-openai]
+provider_cls = "pydantic_ai.providers.openai.OpenAIProvider"
+model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
+model_name = "gpt-4o"
+api_key_env = "OPENAI_API_KEY"
+```
+
+- `provider_cls`: Full Python path to the provider class
+- `model_cls`: Full Python path to the model class
+- `model_name`: Model identifier (e.g., `gpt-4o`, `deepseek-r1:32b`)
+- `api_key_env`: (Optional) Environment variable name for API key
+- `base_url`: (Optional) Custom base URL for the provider
+
+Switch to your custom provider:
+```
+/provider my-custom-ollama
+```
+
 ## Running the Agent
 
 ### Basic Usage (Textual TUI)
