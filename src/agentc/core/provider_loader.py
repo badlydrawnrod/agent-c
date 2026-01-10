@@ -12,24 +12,8 @@ import tomllib
 from .types import ProviderConfig
 
 
-def load_providers(path: Path | None = None) -> dict[str, ProviderConfig]:
-    """Load providers from TOML file.
-
-    Args:
-        path: Path to providers.toml. Defaults to src/agentc_next/providers.toml.
-
-    Returns:
-        Dictionary of provider name to ProviderConfig.
-
-    Raises:
-        FileNotFoundError: If providers.toml is not found.
-    """
-    if path is None:
-        path = Path(__file__).parent.parent / "providers.toml"
-
-    if not path.exists():
-        raise FileNotFoundError(f"Providers configuration not found at {path}")
-
+def _load_single_file(path: Path) -> dict[str, ProviderConfig]:
+    """Load providers from a single TOML file."""
     with path.open("rb") as f:
         data = tomllib.load(f)
 
@@ -44,6 +28,53 @@ def load_providers(path: Path | None = None) -> dict[str, ProviderConfig]:
             base_url=config.get("base_url"),
         )
     return providers
+
+def get_default_provider_dirs() -> list[Path]:
+    """Return provider directories in priority order: repo, user, bundled.
+    
+    Priority:
+    1. Repo providers (.agentc/providers.toml)
+    2. User providers (~/.agentc/providers.toml)
+    3. Bundled providers (package/providers.toml)
+    """
+    from .config import DEFAULT_PROVIDER_DIRS
+    return [
+        *DEFAULT_PROVIDER_DIRS,
+        Path.home() / ".agentc",
+        Path(__file__).parent.parent,
+    ]
+
+def load_providers(dirs: list[Path] | None = None) -> dict[str, ProviderConfig]:
+    """Load and merge providers from multiple directories.
+    
+    Providers discovered in earlier directories in the list take precedence
+    over those with the same name in later directories.
+    
+    Args:
+        dirs: List of directories to search. Defaults to get_default_provider_dirs().
+        
+    Returns:
+        Dictionary of provider name to ProviderConfig.
+    """
+    if dirs is None:
+        dirs = get_default_provider_dirs()
+    
+    merged: dict[str, ProviderConfig] = {}
+    
+    # Process in reverse order so higher priority (earlier in list) overrides lower priority
+    for directory in reversed(dirs):
+        path = directory / "providers.toml" if directory.is_dir() else directory
+        if path.exists():
+            merged |= _load_single_file(path)
+            
+    if not merged:
+        # Fallback to raising error if absolutely nothing loaded and we expected something
+        # checks if we are running from default paths or custom
+        default_bundled = Path(__file__).parent.parent / "providers.toml"
+        if not default_bundled.exists():
+             raise FileNotFoundError("Bundled providers.toml not found")
+
+    return merged
 
 
 def _get_class(class_path: str) -> type:

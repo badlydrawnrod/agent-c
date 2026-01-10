@@ -105,6 +105,34 @@ Maintain and update the test suite in `tests/`. Must cover:
 - Set provider credentials with environment variables or update local config files
 - Example: `export ANTHROPIC_API_KEY=your_key` (Linux/macOS) or `$env:ANTHROPIC_API_KEY = 'your_key'` (PowerShell)
 
+### Custom Providers
+
+Agent C supports custom provider configurations discovered in priority order:
+
+1. **Repo-local**: `.agentc/providers.toml` (highest priority)
+2. **User-global**: `~/.agentc/providers.toml`
+3. **Bundled**: `src/agentc/providers.toml` (lowest priority)
+
+Providers discovered earlier in the list override those with the same name later.
+
+#### Provider Configuration Structure
+
+```toml
+[provider-name]
+provider_cls = "pydantic_ai.providers.ollama.OllamaProvider"
+model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
+model_name = "deepseek-r1:32b"
+api_key_env = "MY_API_KEY"  # Optional: environment variable name
+base_url = "http://localhost:11434/v1"  # Optional: custom base URL
+```
+
+#### Implementation Details (`core/provider_loader.py`)
+
+- **`get_default_provider_dirs()`**: Returns discovery paths in priority order
+- **`load_providers(dirs)`**: Discovers and merges `providers.toml` files, earlier directories override later ones
+- **`build_model(config)`**: Dynamically imports provider/model classes, passes `api_key` (from env) and `base_url`
+- **Error handling**: Raises `FileNotFoundError` if bundled providers missing; `ValueError` on import failures
+
 ## Code Review Checklist
 
 When contributing to `agentc`:

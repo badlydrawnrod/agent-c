@@ -4,15 +4,18 @@ You must preserve the repo's layered, strongly-typed architecture.
 
 ### Package Structure (`src/agentc/`)
 - **`core/`**: Agnostic logic.
-  - `types.py`: Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done), `AgentSessionProtocol`, and shared dataclasses. Also defines `CommandEffect` for effect-based command execution.
-  - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs). Must be UI-agnostic.
+  - `types.py`: Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done), `AgentSessionProtocol`, and shared dataclasses. Also defines `CommandEffect` for effect-based command execution. Includes `ProviderConfig` for provider configuration.
+  - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs, `DEFAULT_PROVIDER`, `DEFAULT_PROVIDER_DIRS`). Must be UI-agnostic.
   - `loop.py`: `AgentSession` implementing the bidirectional async generator loop and mapping pydantic_ai events to `AgentEvent`.
   - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the provider and model configured in `providers.toml` (the repo default is `ollama`), plus the shared toolset and skills table.
   - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`). Commands produce pure `CommandEffect` data; UIs apply effects.
   - `tool_parsing.py`: Robust JSON/dict argument handling for tool calls.
   - `tools.py`: Concrete tool implementations (`list_files`, `glob_paths`, `search_files`, `read_file`, `edit_file`, `create_file`, `run_command`).
   - `skill_loader.py`: Discovers `SKILL.md` skills from bundled skills (installed to user data directory) and project directories (`.github/skills`, `.claude/skills` by default) and renders a skills table for the system prompt.
-  - `provider_loader.py`: Loads provider configurations from `providers.toml` and builds model instances.
+  - `provider_loader.py`: Discovers, loads, and merges `providers.toml` files from repo/user/bundled locations (priority: repo > user > bundled). Dynamically imports provider/model classes and builds instances with API keys and base URLs.
+    - `get_default_provider_dirs()`: Returns discovery paths in priority order (`.agentc/`, `~/.agentc/`, bundled)
+    - `load_providers(dirs)`: Merges provider configs with precedence (earlier overrides later)
+    - `build_model(config)`: Instantiates provider and model, passes `api_key` from env and `base_url`
 - **`middleware/`**: Cross-cutting concerns.
   - `debouncing.py`: `DebouncingMiddleware` for text/thinking delta aggregation (default threshold 40 chars).
 - **`adapters/`**: Bridging core logic to specific frameworks.
