@@ -6,7 +6,7 @@ This module assembles the agent using tools from `tools.py` and types from `type
 
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 
 from pydantic_ai import (
     Agent,
@@ -89,7 +89,7 @@ def create_agent(
         model=model,
         tools=tools,
         deps_type=RunDeps,
-        output_type=Union[str, DeferredToolRequests],  # type: ignore
+        output_type=str | DeferredToolRequests,  # type: ignore
         system_prompt=f"""\
 You are an expert coding assistant with comprehensive file system access and command execution capabilities. You help users navigate, analyze, edit, and manage their codebase efficiently.
 

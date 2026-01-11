@@ -1,4 +1,7 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
+
 from agentc.core.commands import CommandParser, execute_command
 from agentc.core.types import CommandResult, CommandType, ModelConfig
 
@@ -79,7 +82,6 @@ def test_command_metadata_structure():
 
 # --- Tests for execute_command ---
 
-from unittest.mock import patch, MagicMock
 
 class TestExecuteCommand:
     """Tests for the execute_command function."""

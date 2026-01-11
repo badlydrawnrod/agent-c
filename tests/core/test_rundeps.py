@@ -1,4 +1,3 @@
-from pathlib import Path
 from agentc.core.types import RunDeps
 
 def test_rundeps_consolidation(tmp_path):
