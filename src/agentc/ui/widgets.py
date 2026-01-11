@@ -5,11 +5,12 @@ Contains the status bar, tool call indicators, approval requests,
 and the history-enabled text area.
 """
 
-from typing import Literal, TypeAlias, cast
+from typing import Any, Literal, TypeAlias, cast
 
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
+from textual.timer import Timer
 from textual.widgets import Button, Static, TextArea
 
 from ..adapters.textual_messages import AgentApprovalRequestMessage
@@ -28,10 +29,11 @@ CommandSuggestion: TypeAlias = dict[str, str] | str
 SuggestionMode = Literal["command", "model"]
 
 
-def _filter_models(prefix: str, model_names: list[str]) -> list[str]:
+def _filter_models(prefix: str, model_names: list[str]) -> list[CommandSuggestion]:
+    """Filter model names by prefix (case-insensitive)."""
     prefix_lower = prefix.lower()
     if not prefix_lower:
-        return model_names
+        return list(model_names)
     return [name for name in model_names if name.lower().startswith(prefix_lower)]
 
 
@@ -43,7 +45,6 @@ def compute_suggestions(
     Returns model suggestions when the input starts with `/model `, otherwise
     returns command suggestions. Newlines disable suggestions.
     """
-
     if not text.startswith("/") or "\n" in text:
         return [], "command"
 
@@ -53,7 +54,7 @@ def compute_suggestions(
         return _filter_models(model_prefix, model_names), "model"
 
     prefix = lower_text
-    matches = [
+    matches: list[CommandSuggestion] = [
         cmd
         for cmd in COMMAND_METADATA
         if cmd["command"].startswith(prefix)
@@ -83,11 +84,11 @@ class StatusBar(Static):
     }
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         super().__init__("", **kwargs)
-        self._animation_frame = 0
-        self._animation_timer = None
-        self._current_message = ""
+        self._animation_frame: int = 0
+        self._animation_timer: Timer | None = None
+        self._current_message: str = ""
 
     def set_status(self, message: str, animate: bool = True) -> None:
         self._current_message = message
@@ -226,7 +227,9 @@ class ToolCallWidget(Static):
     }
     """
 
-    def __init__(self, tool_call_id: str, tool_name: str, args: dict, **kwargs):
+    def __init__(
+        self, tool_call_id: str, tool_name: str, args: dict[str, Any], **kwargs
+    ) -> None:
         super().__init__(**kwargs)
         self.tool_call_id = tool_call_id
         self.tool_name = tool_name
@@ -295,7 +298,7 @@ class CommandSuggestions(Static):
     }
     """
 
-    def __init__(self, model_names: list[str] | None = None, **kwargs):
+    def __init__(self, model_names: list[str] | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
         self.model_names: list[str] = model_names or []
         self.suggestions: list[CommandSuggestion] = []
@@ -383,7 +386,7 @@ class HistoryTextArea(TextArea):
         Binding("escape", "hide_suggestions", "Hide", show=False),
     ]
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.command_history: list[str] = []
         self.history_index: int | None = None
