@@ -100,6 +100,7 @@ class TextualAgentApp(App):
         self._stream_writer: Any | None = None
         self._thinking_text = ""
         _, models = load_providers()
+        self._model_names = sorted(models.keys())
         self.command_parser = CommandParser(models)
 
     async def _reset_ui_state(self) -> None:
@@ -116,7 +117,7 @@ class TextualAgentApp(App):
         with VerticalScroll(id="scroll"):
             pass
         yield StatusBar(id="status")
-        yield CommandSuggestions(id="suggestions")
+        yield CommandSuggestions(id="suggestions", model_names=self._model_names)
         input_widget = HistoryTextArea(
             placeholder="Type here (multi-line supported). Use Ctrl+Enter to submit.",
             id="input",

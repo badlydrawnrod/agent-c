@@ -29,9 +29,13 @@ provider_cls = "pydantic_ai.providers.openai.OpenAIProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
 api_key_env = "OPENAI_API_KEY"
 
-[models.local-oss]
+[models.ollama-gpt-oss-120b]
 backend = "ollama"
 model_name = "gpt-oss:120b-cloud"
+
+[models.ollama-gpt-oss-20b]
+backend = "ollama"
+model_name = "gpt-oss:20b"
 
 [models.gpt-4o-mini]
 backend = "openai"
@@ -41,7 +45,7 @@ model_name = "gpt-4o-mini"
 backend = "anthropic"
 model_name = "claude-sonnet-4-5"
 
-[models.gemini-flash]
+[models.gemini3-flash]
 backend = "google"
 model_name = "gemini-3-flash-preview"
 

@@ -6,8 +6,8 @@ from agentc.core.types import CommandResult, CommandType, ModelConfig
 @pytest.fixture
 def mock_models():
     return {
-        "local-oss": ModelConfig(
-            name="local-oss",
+        "ollama-gpt-oss-120b": ModelConfig(
+            name="ollama-gpt-oss-120b",
             backend="ollama",
             model_name="gpt-oss",
         ),

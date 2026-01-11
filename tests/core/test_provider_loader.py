@@ -31,8 +31,8 @@ def test_load_providers_returns_backends_and_models() -> None:
     assert backends
     assert models
     assert "ollama" in backends
-    assert "local-oss" in models
-    assert models["local-oss"].backend == "ollama"
+    assert "ollama-gpt-oss-120b" in models
+    assert models["ollama-gpt-oss-120b"].backend == "ollama"
 
 
 def test_load_providers_merges_with_priority(tmp_path: Path) -> None:

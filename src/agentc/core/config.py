@@ -33,7 +33,7 @@ DEFAULT_IGNORE_PATTERNS: list[str] = [
     ".DS_Store",
 ]
 # Default model preset from providers.toml
-DEFAULT_MODEL: str = "local-oss"
+DEFAULT_MODEL: str = "ollama-gpt-oss-120b"
 
 # Default provider discovery paths (relative to working directory)
 DEFAULT_PROVIDER_DIRS: list[Path] = [

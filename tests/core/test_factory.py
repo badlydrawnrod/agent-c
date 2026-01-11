@@ -17,7 +17,7 @@ def test_create_agent_returns_agent() -> None:
 def test_create_agent_explicit_model() -> None:
     """Factory builds using a provided model preset name."""
 
-    agent = create_agent(model_name="local-oss")
+    agent = create_agent(model_name="ollama-gpt-oss-120b")
     assert isinstance(agent, Agent)
 
 

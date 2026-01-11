@@ -7,7 +7,7 @@ You must preserve the repo's layered, strongly-typed architecture.
   - `types.py`: Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done), `AgentSessionProtocol`, and shared dataclasses. Also defines `CommandEffect` for effect-based command execution, plus `BackendConfig` and `ModelConfig` for backend/model presets.
   - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs, `DEFAULT_MODEL`, `DEFAULT_PROVIDER_DIRS`). Must be UI-agnostic.
   - `loop.py`: `AgentSession` implementing the bidirectional async generator loop and mapping pydantic_ai events to `AgentEvent`.
-  - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the model preset configured in `providers.toml` (repo default preset is `local-oss` on the `ollama` backend), plus the shared toolset and skills table.
+  - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the model preset configured in `providers.toml` (repo default preset is `ollama-gpt-oss-120b` on the `ollama` backend), plus the shared toolset and skills table.
   - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`). Commands produce pure `CommandEffect` data; UIs apply effects.
   - `tool_parsing.py`: Robust JSON/dict argument handling for tool calls.
   - `tools.py`: Concrete tool implementations (`list_files`, `glob_paths`, `search_files`, `read_file`, `edit_file`, `create_file`, `run_command`).
@@ -36,7 +36,7 @@ You must preserve the repo's layered, strongly-typed architecture.
 - Command execution: Effect-based pattern separates command logic from UI. `CommandParser.parse()` returns `CommandResult`; `execute_command()` produces `CommandEffect` (pure data); UI layer applies effects. Commands like `/clear` and `/model <name>` are handled generically; framework-specific commands (`/exit`, unknown commands) are handled directly by the UI.
 - Tools: All file ops are confined to the working tree, `read_file` emits `cat -n` formatting, `edit_file` enforces a single match and writes atomically with `.bak` backups, and `run_command` plus `edit_file` plus `create_file` require approval. `glob_paths` and `search_files` respect combined ignore patterns (defaults like `.git/` plus `.gitignore`).
 - Skills: `SkillLoader` discovers skills from project directories (`.github/skills`, `.claude/skills`), user directory (`~/.agentc/skills`), and bundled skills (installed to user data directory). Returns all discovered skills (no precedence filtering) and injects a skills table plus usage guidance into the system prompt.
-- Model defaults: backends and models are loaded from `src/agentc/providers.toml` via `provider_loader.load_providers()` and `provider_loader.build_model()`; the repo default model preset is `local-oss` (see `core/config.py`), which maps to an Ollama-backed model string in `providers.toml` (for example `gpt-oss:120b-cloud` at `http://localhost:11434/v1`).
+- Model defaults: backends and models are loaded from `src/agentc/providers.toml` via `provider_loader.load_providers()` and `provider_loader.build_model()`; the repo default model preset is `ollama-gpt-oss-120b (see `core/config.py`), which maps to an Ollama-backed model string in `providers.toml` (for example `gpt-oss:120b-cloud` at `http://localhost:11434/v1`).
 
 ### Rules (strict)
 - **Layers**: types (core) / loop / middleware / adapter / UI. State the layer(s) you change **before** modifying code.
