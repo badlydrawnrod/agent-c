@@ -99,7 +99,9 @@ class TextualAgentApp(App):
         self._thinking_output: Static | None = None
         self._stream_writer: Any | None = None
         self._thinking_text = ""
-        self.command_parser = CommandParser(load_providers())
+        _, models = load_providers()
+        self._model_names = sorted(models.keys())
+        self.command_parser = CommandParser(models)
 
     async def _reset_ui_state(self) -> None:
         """Clear the scroll area and reset tracking variables."""
@@ -115,7 +117,7 @@ class TextualAgentApp(App):
         with VerticalScroll(id="scroll"):
             pass
         yield StatusBar(id="status")
-        yield CommandSuggestions(id="suggestions")
+        yield CommandSuggestions(id="suggestions", model_names=self._model_names)
         input_widget = HistoryTextArea(
             placeholder="Type here (multi-line supported). Use Ctrl+Enter to submit.",
             id="input",
@@ -153,7 +155,12 @@ class TextualAgentApp(App):
             if effect.new_session is not None:
                 self._session = effect.new_session
             if effect.notification:
-                self.notify(effect.notification)
+                # If no new session was created but we have a notification,
+                # it's likely an error (e.g., missing API key)
+                if effect.new_session is None and not effect.should_reset_ui:
+                    self.notify(effect.notification, severity="error")
+                else:
+                    self.notify(effect.notification)
             return
 
         # Normal input.

@@ -15,7 +15,8 @@ from pathlib import Path
 
 from .factory import create_agent
 from .loop import AgentSession
-from .types import CommandEffect, CommandResult, CommandType, ProviderConfig, RunDeps
+from .provider_loader import MissingAPIKeyError
+from .types import CommandEffect, CommandResult, CommandType, ModelConfig, RunDeps
 
 COMMAND_METADATA: list[dict[str, str]] = [
     {
@@ -29,9 +30,9 @@ COMMAND_METADATA: list[dict[str, str]] = [
         "description": "Exit the application",
     },
     {
-        "command": "/provider",
+        "command": "/model",
         "args": "<name>",
-        "description": "Switch LLM provider",
+        "description": "Switch model preset",
     },
     {
         "command": "/help",
@@ -64,13 +65,13 @@ class CommandParser:
     - Return structured results for callers to act on
     """
 
-    def __init__(self, providers: dict[str, ProviderConfig]):
+    def __init__(self, models: dict[str, ModelConfig]):
         """Initialize parser with available providers.
 
         Args:
-            providers: Dict of provider names to ProviderConfig.
+            models: Dict of model preset names to ModelConfig.
         """
-        self.providers = providers
+        self.models = models
 
     def parse(self, user_input: str) -> CommandResult:
         """Parse user input into structured command.
@@ -78,7 +79,7 @@ class CommandParser:
         Handles these command formats:
         - /clear or /reset: Clear conversation context
         - /exit, /quit, or /bye: Exit application
-        - /provider <name>: Switch to provider
+        - /model <name>: Switch to model preset
         - Anything else: Normal user input (not a command)
 
         Args:
@@ -106,21 +107,21 @@ class CommandParser:
         if command in ("/help", "/?"):
             return CommandResult(CommandType.HELP, {})
 
-        # Check for provider switch command
+        # Check for model switch command
         parts = command.split(maxsplit=1)
-        if len(parts) >= 2 and parts[0] == "/provider":
-            provider_name = parts[1].strip()
-            if provider_name in self.providers:
+        if len(parts) >= 2 and parts[0] == "/model":
+            model_name = parts[1].strip()
+            if model_name in self.models:
                 return CommandResult(
-                    CommandType.PROVIDER_SWITCH,
-                    {"provider": provider_name},
+                    CommandType.MODEL_SWITCH,
+                    {"model": model_name},
                 )
             else:
                 return CommandResult(
                     CommandType.UNKNOWN,
                     {
                         "input": command,
-                        "error": f"Unknown provider: {provider_name}",
+                        "error": f"Unknown model: {model_name}",
                     },
                 )
 
@@ -137,7 +138,7 @@ class CommandParser:
 
 def execute_command(
     result: CommandResult,
-    provider_name: str | None = None,
+    model_name: str | None = None,
     deps: RunDeps | None = None,
 ) -> CommandEffect | None:
     """Execute a command and return its effect.
@@ -148,7 +149,7 @@ def execute_command(
 
     Args:
         result: The parsed command result from CommandParser.
-        provider_name: Optional provider name for PROVIDER_SWITCH command.
+        model_name: Optional model name for MODEL_SWITCH command.
 
     Returns:
         CommandEffect describing what should happen, or None if the
@@ -166,16 +167,22 @@ def execute_command(
                 should_reset_ui=True,
             )
 
-        case CommandType.PROVIDER_SWITCH:
-            provider = result.args.get("provider", provider_name)
-            return CommandEffect(
-                new_session=AgentSession(
-                    agent=create_agent(provider_name=provider, skill_dirs=skill_dirs),
-                    deps=deps,
-                ),
-                notification=f"Switched to provider: {provider}",
-                should_reset_ui=True,
-            )
+        case CommandType.MODEL_SWITCH:
+            model = result.args.get("model", model_name)
+            try:
+                return CommandEffect(
+                    new_session=AgentSession(
+                        agent=create_agent(model_name=model, skill_dirs=skill_dirs),
+                        deps=deps,
+                    ),
+                    notification=f"Switched to model: {model}",
+                    should_reset_ui=True,
+                )
+            except MissingAPIKeyError as e:
+                return CommandEffect(
+                    notification=str(e),
+                    should_reset_ui=False,
+                )
 
         case CommandType.HELP:
             help_lines = ["Available Commands:"]

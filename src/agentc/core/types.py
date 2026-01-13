@@ -16,15 +16,26 @@ from pydantic_ai import Agent, DeferredToolRequests
 
 
 @dataclass
-class ProviderConfig:
-    """Configuration for a provider loaded from TOML."""
+class BackendConfig:
+    """Configuration for a model backend loaded from TOML."""
 
     name: str
     provider_cls_path: str  # e.g., "pydantic_ai.providers.anthropic.AnthropicProvider"
     model_cls_path: str  # e.g., "pydantic_ai.models.anthropic.AnthropicModel"
+    api_key_env: str | None = None
+    base_url: str | None = None
+
+
+@dataclass
+class ModelConfig:
+    """Configuration for a model preset bound to a backend."""
+
+    name: str
+    backend: str
     model_name: str
     api_key_env: str | None = None
     base_url: str | None = None
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 class CommandType(Enum):
@@ -33,7 +44,7 @@ class CommandType(Enum):
     NORMAL_INPUT = "normal"  # Regular agent input (not a command)
     CLEAR = "clear"  # Clear conversation context
     EXIT = "exit"  # Exit application
-    PROVIDER_SWITCH = "switch"  # Switch to different provider
+    MODEL_SWITCH = "switch"  # Switch to different model preset
     HELP = "help"  # Show available commands
     UNKNOWN = "unknown"  # Unknown command (error)
 

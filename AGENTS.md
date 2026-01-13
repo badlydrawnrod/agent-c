@@ -38,10 +38,7 @@ Event-driven, layered architecture with:
 - **`middleware/`**: Cross-cutting concerns (e.g., debouncing)
 - **`adapters/`**: Bridges core event stream to specific frameworks. Owns translation logic and UI-specific message types.
 - **`ui/`**: User interface implementations (Textual TUI, Console)
-- **`skills/`**: Bundled skills (e.g., domino-number-calculator) packaged with the application
-
-### Legacy Implementation (`src/agentc_legacy/`) - DEPRECATED
-Traditional monolithic agent with file operations, multiple personalities, and CLI interface. Available via `agent-c-legacy` command but will be removed in a future release.
+- **`skills/`**: Bundled skills (e.g., fibonacci-number) packaged with the application
 
 ## Code Style & Architecture Rules
 
@@ -101,36 +98,40 @@ Maintain and update the test suite in `tests/`. Must cover:
 
 ## Configuration & Secrets
 
-- The `providers.toml` file in `src/agentc/` holds provider configurations
+- The `providers.toml` file in `src/agentc/` holds backend definitions and model presets
 - Set provider credentials with environment variables or update local config files
 - Example: `export ANTHROPIC_API_KEY=your_key` (Linux/macOS) or `$env:ANTHROPIC_API_KEY = 'your_key'` (PowerShell)
 
-### Custom Providers
+### Custom Backends and Models
 
-Agent C supports custom provider configurations discovered in priority order:
+Agent C discovers configuration in priority order:
 
 1. **Repo-local**: `.agentc/providers.toml` (highest priority)
 2. **User-global**: `~/.agentc/providers.toml`
 3. **Bundled**: `src/agentc/providers.toml` (lowest priority)
 
-Providers discovered earlier in the list override those with the same name later.
+Entries from earlier locations override those with the same name later.
 
-#### Provider Configuration Structure
+#### providers.toml Structure
 
 ```toml
-[provider-name]
+[backends.ollama]
 provider_cls = "pydantic_ai.providers.ollama.OllamaProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
+api_key_env = "MY_API_KEY"
+base_url = "http://localhost:11434/v1"
+
+[models.local]
+backend = "ollama"
 model_name = "deepseek-r1:32b"
-api_key_env = "MY_API_KEY"  # Optional: environment variable name
-base_url = "http://localhost:11434/v1"  # Optional: custom base URL
+params = {temperature = 0.2}
 ```
 
 #### Implementation Details (`core/provider_loader.py`)
 
 - **`get_default_provider_dirs()`**: Returns discovery paths in priority order
-- **`load_providers(dirs)`**: Discovers and merges `providers.toml` files, earlier directories override later ones
-- **`build_model(config)`**: Dynamically imports provider/model classes, passes `api_key` (from env) and `base_url`
+- **`load_providers(dirs)`**: Discovers and merges backend/model presets; earlier directories override later ones
+- **`build_model(model_config, backend_config)`**: Dynamically imports provider/model classes, applies params, passes `api_key`/`base_url` overrides
 - **Error handling**: Raises `FileNotFoundError` if bundled providers missing; `ValueError` on import failures
 
 ## Code Review Checklist
@@ -150,4 +151,3 @@ When contributing to `agentc`:
   - `agentc.ui.run_textual:main` (agent-c command - default Textual UI)
   - `agentc.ui.run_console:main` (run-console command)
   - `agentc.ui.run_textual:main` (run-textual command)
-  - `agentc_legacy.agent:main` (agent-c-legacy command - deprecated)

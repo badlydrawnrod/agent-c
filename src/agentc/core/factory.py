@@ -4,8 +4,9 @@ Agent factory for Agent C Next.
 This module assembles the agent using tools from `tools.py` and types from `types.py`.
 """
 
+from dataclasses import replace
 from pathlib import Path
-from typing import Union
+from typing import Any
 
 from pydantic_ai import (
     Agent,
@@ -13,7 +14,7 @@ from pydantic_ai import (
     Tool,
 )
 
-from .config import DEFAULT_PROVIDER
+from .config import DEFAULT_MODEL
 from .tools import (
     list_files,
     glob_paths,
@@ -30,21 +31,45 @@ from .provider_loader import load_providers, build_model
 
 
 def create_agent(
-    skill_dirs: list[Path] | None = None, provider_name: str | None = None
+    skill_dirs: list[Path] | None = None,
+    model_name: str | None = None,
+    override_model_name: str | None = None,
+    **model_params: Any,
 ) -> NextAgent:
-    """Factory function to create a configured agent instance."""
+    """Factory function to create a configured agent instance.
+
+    Args:
+        skill_dirs: Optional skill directories to include during skill discovery.
+        model_name: Name of the model preset to load from providers.toml.
+        override_model_name: Runtime override for the model string passed to the backend.
+        **model_params: Extra model keyword arguments merged with preset params.
+    """
     loader = SkillLoader()
     if skill_dirs is None:
         skill_dirs = loader.get_default_skill_dirs()
 
-    providers = load_providers()
-    name = provider_name or DEFAULT_PROVIDER
-    if name not in providers:
+    backends, models = load_providers()
+    preset_name = model_name or DEFAULT_MODEL
+    if preset_name not in models:
         raise ValueError(
-            f"Unknown provider: {name}. Available providers: {list(providers.keys())}"
+            f"Unknown model preset: {preset_name}. Available models: {list(models.keys())}"
         )
 
-    _, model = build_model(providers[name])
+    preset = models[preset_name]
+    backend = backends.get(preset.backend)
+    if backend is None:
+        raise ValueError(
+            f"Backend '{preset.backend}' for model preset '{preset_name}' was not found"
+        )
+
+    merged_params = {**preset.params, **model_params}
+    effective_model = replace(
+        preset,
+        model_name=override_model_name or preset.model_name,
+        params=merged_params,
+    )
+
+    _, model = build_model(effective_model, backend)
 
     tools: list[Tool[RunDeps]] = [
         Tool(list_files, takes_ctx=True),
@@ -64,7 +89,7 @@ def create_agent(
         model=model,
         tools=tools,
         deps_type=RunDeps,
-        output_type=Union[str, DeferredToolRequests],  # type: ignore
+        output_type=str | DeferredToolRequests,  # type: ignore
         system_prompt=f"""\
 You are an expert coding assistant with comprehensive file system access and command execution capabilities. You help users navigate, analyze, edit, and manage their codebase efficiently.
 

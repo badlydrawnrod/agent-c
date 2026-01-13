@@ -32,8 +32,8 @@ DEFAULT_IGNORE_PATTERNS: list[str] = [
     "node_modules/",
     ".DS_Store",
 ]
-# Default provider from providers.toml
-DEFAULT_PROVIDER: str = "ollama"
+# Default model preset from providers.toml
+DEFAULT_MODEL: str = "ollama-gpt-oss-120b"
 
 # Default provider discovery paths (relative to working directory)
 DEFAULT_PROVIDER_DIRS: list[Path] = [

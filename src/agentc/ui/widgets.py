@@ -5,9 +5,12 @@ Contains the status bar, tool call indicators, approval requests,
 and the history-enabled text area.
 """
 
+from typing import Any, Literal, TypeAlias, cast
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
+from textual.timer import Timer
 from textual.widgets import Button, Static, TextArea
 
 from ..adapters.textual_messages import AgentApprovalRequestMessage
@@ -19,7 +22,45 @@ __all__ = [
     "ToolCallWidget",
     "HistoryTextArea",
     "CommandSuggestions",
+    "compute_suggestions",
 ]
+
+CommandSuggestion: TypeAlias = dict[str, str] | str
+SuggestionMode = Literal["command", "model"]
+
+
+def _filter_models(prefix: str, model_names: list[str]) -> list[CommandSuggestion]:
+    """Filter model names by prefix (case-insensitive)."""
+    prefix_lower = prefix.lower()
+    if not prefix_lower:
+        return list(model_names)
+    return [name for name in model_names if name.lower().startswith(prefix_lower)]
+
+
+def compute_suggestions(
+    text: str, model_names: list[str]
+) -> tuple[list[CommandSuggestion], SuggestionMode]:
+    """Compute suggestions for the given input text.
+
+    Returns model suggestions when the input starts with `/model `, otherwise
+    returns command suggestions. Newlines disable suggestions.
+    """
+    if not text.startswith("/") or "\n" in text:
+        return [], "command"
+
+    lower_text = text.lower()
+    if lower_text.startswith("/model "):
+        model_prefix = text[len("/model ") :]
+        return _filter_models(model_prefix, model_names), "model"
+
+    prefix = lower_text
+    matches: list[CommandSuggestion] = [
+        cmd
+        for cmd in COMMAND_METADATA
+        if cmd["command"].startswith(prefix)
+        or any(alias.startswith(prefix) for alias in cmd.get("aliases", "").split(", "))
+    ]
+    return matches, "command"
 
 # UI Animation constants
 SPINNER_FRAMES: tuple[str, ...] = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
@@ -43,11 +84,11 @@ class StatusBar(Static):
     }
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         super().__init__("", **kwargs)
-        self._animation_frame = 0
-        self._animation_timer = None
-        self._current_message = ""
+        self._animation_frame: int = 0
+        self._animation_timer: Timer | None = None
+        self._current_message: str = ""
 
     def set_status(self, message: str, animate: bool = True) -> None:
         self._current_message = message
@@ -186,7 +227,9 @@ class ToolCallWidget(Static):
     }
     """
 
-    def __init__(self, tool_call_id: str, tool_name: str, args: dict, **kwargs):
+    def __init__(
+        self, tool_call_id: str, tool_name: str, args: dict[str, Any], **kwargs
+    ) -> None:
         super().__init__(**kwargs)
         self.tool_call_id = tool_call_id
         self.tool_name = tool_name
@@ -222,7 +265,8 @@ class CommandSuggestions(Static):
         background: $surface;
         border: round $accent;
         height: auto;
-        max-height: 8;
+        max-height: 12;
+        overflow: auto;
         width: 100%;
         display: none;
         padding: 0 1;
@@ -254,13 +298,24 @@ class CommandSuggestions(Static):
     }
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, model_names: list[str] | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.suggestions: list[dict[str, str]] = []
+        self.model_names: list[str] = model_names or []
+        self.suggestions: list[CommandSuggestion] = []
+        self.suggestion_mode: SuggestionMode = "command"
         self.selected_index: int = 0
         self.border_title = "Commands"
 
-    def set_suggestions(self, suggestions: list[dict[str, str]]) -> None:
+    def set_model_names(self, model_names: list[str]) -> None:
+        """Replace the list of model names used for autocomplete."""
+        self.model_names = model_names
+
+    def set_suggestions(
+        self, suggestions: list[CommandSuggestion], mode: SuggestionMode = "command"
+    ) -> None:
+        """Update visible suggestions and presentation mode."""
+        self.suggestion_mode = mode
+        self.border_title = "Models" if mode == "model" else "Commands"
         self.suggestions = suggestions
         self.selected_index = 0
         self._update_display()
@@ -277,22 +332,26 @@ class CommandSuggestions(Static):
         from rich.text import Text
 
         content = Text()
-        for i, cmd in enumerate(self.suggestions):
+        for i, suggestion in enumerate(self.suggestions):
             is_selected = i == self.selected_index
-            
-            # Glyph indicator
-            glyph = "▸ " if is_selected else "  "
-            content.append(glyph, style="bold" if is_selected else "dim")
-            
-            # Command name
-            content.append(cmd["command"], style="bold" if is_selected else "")
-            
-            # Description
-            content.append(f"  {cmd['description']}", style="" if is_selected else "dim")
-            
+
+            if self.suggestion_mode == "model":
+                model_name = str(suggestion)
+                glyph = "▸ " if is_selected else "  "
+                content.append(glyph, style="bold" if is_selected else "dim")
+                content.append(model_name, style="bold" if is_selected else "")
+            else:
+                cmd = cast(dict[str, str], suggestion)
+                glyph = "▸ " if is_selected else "  "
+                content.append(glyph, style="bold" if is_selected else "dim")
+                content.append(cmd["command"], style="bold" if is_selected else "")
+                content.append(
+                    f"  {cmd['description']}", style="" if is_selected else "dim"
+                )
+
             if i < len(self.suggestions) - 1:
                 content.append("\n")
-        
+
         self.update(content)
 
     def move_selection(self, delta: int) -> None:
@@ -303,9 +362,17 @@ class CommandSuggestions(Static):
 
     @property
     def selected_command(self) -> str | None:
-        if self.suggestions and 0 <= self.selected_index < len(self.suggestions):
-            return self.suggestions[self.selected_index]["command"]
-        return None
+        if not self.suggestions or not 0 <= self.selected_index < len(
+            self.suggestions
+        ):
+            return None
+
+        if self.suggestion_mode == "model":
+            suggestion = self.suggestions[self.selected_index]
+            return f"/model {suggestion}"
+
+        suggestion = cast(dict[str, str], self.suggestions[self.selected_index])
+        return suggestion["command"]
 
 
 
@@ -319,7 +386,7 @@ class HistoryTextArea(TextArea):
         Binding("escape", "hide_suggestions", "Hide", show=False),
     ]
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.command_history: list[str] = []
         self.history_index: int | None = None
@@ -337,18 +404,10 @@ class HistoryTextArea(TextArea):
             return
 
         text = self.text
-        if text.startswith("/") and "\n" not in text:
-            # Filter commands
-            prefix = text.lower()
-            matches = [
-                cmd
-                for cmd in COMMAND_METADATA
-                if cmd["command"].startswith(prefix)
-                or any(alias.startswith(prefix) for alias in cmd.get("aliases", "").split(", "))
-            ]
-            self._suggestions_widget.set_suggestions(matches)
-        else:
-            self._suggestions_widget.set_suggestions([])
+        suggestions, mode = compute_suggestions(
+            text, self._suggestions_widget.model_names
+        )
+        self._suggestions_widget.set_suggestions(suggestions, mode=mode)
 
     def action_complete_command(self) -> None:
         if self._suggestions_widget and self._suggestions_widget.has_class("visible"):

@@ -1,36 +1,58 @@
-[anthropic]
+[backends.anthropic]
 provider_cls = "pydantic_ai.providers.anthropic.AnthropicProvider"
 model_cls = "pydantic_ai.models.anthropic.AnthropicModel"
 api_key_env = "ANTHROPIC_API_KEY"
-model_name = "claude-sonnet-4-5"
 
-[google]
+[backends.google]
 provider_cls = "pydantic_ai.providers.google.GoogleProvider"
 model_cls = "pydantic_ai.models.google.GoogleModel"
 api_key_env = "GOOGLE_API_KEY"
-model_name = "gemini-3-flash-preview"
 
-[huggingface]
+[backends.huggingface]
 provider_cls = "pydantic_ai.providers.openai.OpenAIProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
 api_key_env = "HF_TOKEN"
 base_url = "https://router.huggingface.co/v1"
-model_name = "openai/gpt-oss-120b:cerebras"
 
-[mistral]
+[backends.mistral]
 provider_cls = "pydantic_ai.providers.mistral.MistralProvider"
 model_cls = "pydantic_ai.models.mistral.MistralModel"
 api_key_env = "MISTRAL_API_KEY"
-model_name = "mistral-large-latest"
 
-[ollama]
+[backends.ollama]
 provider_cls = "pydantic_ai.providers.ollama.OllamaProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
 base_url = "http://localhost:11434/v1"
-model_name = "gpt-oss:120b-cloud"
 
-[openai]
+[backends.openai]
 provider_cls = "pydantic_ai.providers.openai.OpenAIProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
 api_key_env = "OPENAI_API_KEY"
+
+[models.ollama-gpt-oss-120b]
+backend = "ollama"
+model_name = "gpt-oss:120b-cloud"
+
+[models.ollama-gpt-oss-20b]
+backend = "ollama"
+model_name = "gpt-oss:20b"
+
+[models.gpt-4o-mini]
+backend = "openai"
 model_name = "gpt-4o-mini"
+
+[models.claude-sonnet]
+backend = "anthropic"
+model_name = "claude-sonnet-4-5"
+
+[models.gemini3-flash]
+backend = "google"
+model_name = "gemini-3-flash-preview"
+
+[models.hf-gpt-oss-120b]
+backend = "huggingface"
+model_name = "openai/gpt-oss-120b:cerebras"
+
+[models.mistral-large]
+backend = "mistral"
+model_name = "mistral-large-latest"

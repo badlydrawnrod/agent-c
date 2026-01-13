@@ -1,27 +1,30 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
+
 from agentc.core.commands import CommandParser, execute_command
-from agentc.core.types import CommandResult, CommandType, ProviderConfig
+from agentc.core.types import CommandResult, CommandType, ModelConfig
+
 
 @pytest.fixture
-def mock_providers():
+def mock_models():
     return {
-        "ollama": ProviderConfig(
-            name="ollama",
-            provider_cls_path="p.OllamaProvider",
-            model_cls_path="m.OpenAIChatModel",
-            model_name="test"
+        "ollama-gpt-oss-120b": ModelConfig(
+            name="ollama-gpt-oss-120b",
+            backend="ollama",
+            model_name="gpt-oss",
         ),
-        "anthropic": ProviderConfig(
-            name="anthropic",
-            provider_cls_path="p.AnthropicProvider",
-            model_cls_path="m.AnthropicModel",
-            model_name="claude-3"
-        )
+        "claude": ModelConfig(
+            name="claude",
+            backend="anthropic",
+            model_name="claude-3",
+        ),
     }
 
+
 @pytest.fixture
-def parser(mock_providers):
-    return CommandParser(mock_providers)
+def parser(mock_models):
+    return CommandParser(mock_models)
 
 def test_parse_normal_input(parser):
     result = parser.parse("hello agent")
@@ -42,15 +45,15 @@ def test_parse_clear(parser):
         result = parser.parse(cmd)
         assert result.command_type == CommandType.CLEAR
 
-def test_parse_provider_switch_success(parser):
-    result = parser.parse("/provider anthropic")
-    assert result.command_type == CommandType.PROVIDER_SWITCH
-    assert result.args["provider"] == "anthropic"
+def test_parse_model_switch_success(parser):
+    result = parser.parse("/model claude")
+    assert result.command_type == CommandType.MODEL_SWITCH
+    assert result.args["model"] == "claude"
 
-def test_parse_provider_switch_unknown(parser):
-    result = parser.parse("/provider unknown-llm")
+def test_parse_model_switch_unknown(parser):
+    result = parser.parse("/model unknown-llm")
     assert result.command_type == CommandType.UNKNOWN
-    assert "Unknown provider" in result.args["error"]
+    assert "Unknown model" in result.args["error"]
 
 def test_parse_unknown_command(parser):
     result = parser.parse("/invalid command")
@@ -61,9 +64,9 @@ def test_parse_case_insensitivity(parser):
     result = parser.parse("/EXIT")
     assert result.command_type == CommandType.EXIT
     
-    result = parser.parse("/PROVIDER Anthropic")
-    assert result.command_type == CommandType.PROVIDER_SWITCH
-    assert result.args["provider"] == "anthropic"
+    result = parser.parse("/MODEL Claude")
+    assert result.command_type == CommandType.MODEL_SWITCH
+    assert result.args["model"] == "claude"
 
 def test_parse_help(parser):
     for cmd in ["/help", "/?"]:
@@ -79,7 +82,6 @@ def test_command_metadata_structure():
 
 # --- Tests for execute_command ---
 
-from unittest.mock import patch, MagicMock
 
 class TestExecuteCommand:
     """Tests for the execute_command function."""
@@ -99,21 +101,21 @@ class TestExecuteCommand:
         mock_create_agent.assert_called_once()
 
     @patch("agentc.core.commands.create_agent")
-    def test_execute_provider_switch_returns_effect(self, mock_create_agent):
-        """PROVIDER_SWITCH command should return effect with new session."""
+    def test_execute_model_switch_returns_effect(self, mock_create_agent):
+        """MODEL_SWITCH command should return effect with new session."""
         mock_create_agent.return_value = MagicMock()
 
-        result = CommandResult(CommandType.PROVIDER_SWITCH, {"provider": "anthropic"})
+        result = CommandResult(CommandType.MODEL_SWITCH, {"model": "claude"})
         effect = execute_command(result)
 
         assert effect is not None
         assert effect.new_session is not None
-        assert effect.notification == "Switched to provider: anthropic"
+        assert effect.notification == "Switched to model: claude"
         assert effect.should_reset_ui is True
         
-        # Verify create_agent was called with correct provider
+        # Verify create_agent was called with correct model
         call_kwargs = mock_create_agent.call_args.kwargs
-        assert call_kwargs.get("provider_name") == "anthropic"
+        assert call_kwargs.get("model_name") == "claude"
 
     def test_execute_exit_returns_none(self):
         """EXIT command should return None (handled by UI)."""
@@ -149,3 +151,21 @@ class TestExecuteCommand:
         assert "/clear" in effect.notification
         assert "/help" in effect.notification
         assert effect.should_reset_ui is False
+
+    @patch("agentc.core.commands.create_agent")
+    def test_execute_model_switch_missing_api_key(self, mock_create_agent):
+        """MODEL_SWITCH with missing API key should return error notification."""
+        from agentc.core.provider_loader import MissingAPIKeyError
+
+        mock_create_agent.side_effect = MissingAPIKeyError(
+            "GOOGLE_API_KEY", "gemini-flash"
+        )
+
+        result = CommandResult(CommandType.MODEL_SWITCH, {"model": "gemini-flash"})
+        effect = execute_command(result)
+
+        assert effect is not None
+        assert effect.new_session is None
+        assert "GOOGLE_API_KEY" in effect.notification
+        assert effect.should_reset_ui is False
+
