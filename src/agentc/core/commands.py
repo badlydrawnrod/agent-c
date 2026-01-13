@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .factory import create_agent
 from .loop import AgentSession
+from .provider_loader import MissingAPIKeyError
 from .types import CommandEffect, CommandResult, CommandType, ModelConfig, RunDeps
 
 COMMAND_METADATA: list[dict[str, str]] = [
@@ -168,14 +169,20 @@ def execute_command(
 
         case CommandType.MODEL_SWITCH:
             model = result.args.get("model", model_name)
-            return CommandEffect(
-                new_session=AgentSession(
-                    agent=create_agent(model_name=model, skill_dirs=skill_dirs),
-                    deps=deps,
-                ),
-                notification=f"Switched to model: {model}",
-                should_reset_ui=True,
-            )
+            try:
+                return CommandEffect(
+                    new_session=AgentSession(
+                        agent=create_agent(model_name=model, skill_dirs=skill_dirs),
+                        deps=deps,
+                    ),
+                    notification=f"Switched to model: {model}",
+                    should_reset_ui=True,
+                )
+            except MissingAPIKeyError as e:
+                return CommandEffect(
+                    notification=str(e),
+                    should_reset_ui=False,
+                )
 
         case CommandType.HELP:
             help_lines = ["Available Commands:"]

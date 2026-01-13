@@ -155,7 +155,12 @@ class TextualAgentApp(App):
             if effect.new_session is not None:
                 self._session = effect.new_session
             if effect.notification:
-                self.notify(effect.notification)
+                # If no new session was created but we have a notification,
+                # it's likely an error (e.g., missing API key)
+                if effect.new_session is None and not effect.should_reset_ui:
+                    self.notify(effect.notification, severity="error")
+                else:
+                    self.notify(effect.notification)
             return
 
         # Normal input.

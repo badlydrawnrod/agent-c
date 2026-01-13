@@ -10,6 +10,18 @@ import tomllib
 from .types import BackendConfig, ModelConfig
 
 
+class MissingAPIKeyError(ValueError):
+    """Raised when a required API key is not set in the environment."""
+
+    def __init__(self, env_var: str, model_name: str):
+        self.env_var = env_var
+        self.model_name = model_name
+        super().__init__(
+            f"API key for model '{model_name}' not found. "
+            f"Please set the {env_var} environment variable."
+        )
+
+
 def _load_single_file(path: Path) -> tuple[dict[str, BackendConfig], dict[str, ModelConfig]]:
     """Load backends and models from a single TOML file."""
 
@@ -129,6 +141,8 @@ def build_model(
         api_key = os.getenv(api_key_env)
         if api_key:
             provider_kwargs["api_key"] = api_key
+        else:
+            raise MissingAPIKeyError(api_key_env, model_config.model_name)
     if base_url:
         provider_kwargs["base_url"] = base_url
 

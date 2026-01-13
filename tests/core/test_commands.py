@@ -151,3 +151,21 @@ class TestExecuteCommand:
         assert "/clear" in effect.notification
         assert "/help" in effect.notification
         assert effect.should_reset_ui is False
+
+    @patch("agentc.core.commands.create_agent")
+    def test_execute_model_switch_missing_api_key(self, mock_create_agent):
+        """MODEL_SWITCH with missing API key should return error notification."""
+        from agentc.core.provider_loader import MissingAPIKeyError
+
+        mock_create_agent.side_effect = MissingAPIKeyError(
+            "GOOGLE_API_KEY", "gemini-flash"
+        )
+
+        result = CommandResult(CommandType.MODEL_SWITCH, {"model": "gemini-flash"})
+        effect = execute_command(result)
+
+        assert effect is not None
+        assert effect.new_session is None
+        assert "GOOGLE_API_KEY" in effect.notification
+        assert effect.should_reset_ui is False
+
