@@ -14,7 +14,6 @@
     ```
 - **Run Agent C (Textual UI)**: `uv run agent-c`
 - **Run Console UI**: `uv run run-console`
-- **Run legacy agent**: `uv run agent-c-legacy --personality coder`
 - **Test all**: `uv run pytest`
 - **Test agentc only**: `uv run pytest tests/core/ tests/middleware/ tests/adapters/`
 - **Type check**: `uv run mypy`
@@ -39,6 +38,26 @@ Event-driven, layered architecture with:
 - **`adapters/`**: Bridges core event stream to specific frameworks. Owns translation logic and UI-specific message types.
 - **`ui/`**: User interface implementations (Textual TUI, Console)
 - **`skills/`**: Bundled skills (e.g., fibonacci-number) packaged with the application
+
+## Available Tools
+
+Agent C provides the following tools in `core/tools.py`:
+
+- **list_files**: List directory contents with gitignore support
+- **glob_paths**: Find files matching glob patterns recursively
+- **search_files**: Search for text in files with line-level matches
+- **read_file**: Read file with cat -n style line numbers
+- **create_file**: Create new files with atomic writes
+- **edit_file**: Replace a unique string occurrence in a file
+- **apply_hunks**: Apply structured patch hunks to one or more files atomically
+  - Uses anchor-based matching (lines before/after the edit)
+  - Supports insert (empty `remove`), delete (empty `add`), and replace operations
+  - Transactional: all hunks must match or no files are modified
+  - Creates timestamped backups before modification
+  - Returns structured JSON summary of applied changes
+- **run_command**: Execute shell commands asynchronously
+
+All tools respect `.gitignore` patterns and default ignore patterns. File operations use atomic writes via temp files.
 
 ## Code Style & Architecture Rules
 
@@ -75,6 +94,7 @@ Maintain and update the test suite in `tests/`. Must cover:
 - `middleware.debouncing`: flush logic and delta aggregation
 - `adapters.textual`: mapping to `adapters.messages`
 - `core.tool_parsing`: robust JSON argument handling
+- `core.apply_hunks`: hunk matching, insertion, deletion, transactional behavior across files
 
 ## Development Workflow
 
