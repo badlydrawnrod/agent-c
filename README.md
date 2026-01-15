@@ -173,13 +173,25 @@ Each skill is a subdirectory containing a `SKILL.md` file with metadata and usag
 
 Agent C provides these tools to assist with coding tasks:
 
-- **read_file**: Read file contents
 - **list_files**: List directory contents
-- **edit_file**: Modify file contents with safety backups
-- **create_file**: Create new files (creates parent directories if needed)
-- **search_files**: Search for text in files recursively
 - **glob_paths**: Find files matching glob patterns
-- **run_command**: Execute shell commands
+- **search_files**: Search for text in files recursively
+- **read_file**: Read file contents with line numbers
+- **create_file**: Create new files (creates parent directories if needed)
+- **edit_file**: Replace a single occurrence in a file with safety backups
+- **apply_hunks**: Apply multiple structured edits to one or more files atomically
+  - Supports multiple non-contiguous edits in the same file
+  - Atomic transactions: all hunks must succeed or no files are modified
+  - Anchor-based matching with context lines for precision
+  - Automatic backups and rollback on failure
+- **run_command**: Execute shell commands asynchronously
+
+### File Editing Strategy
+
+The agent uses a smart editing strategy:
+- **Single edit**: Use `edit_file` for one isolated change
+- **Multiple edits**: Use `apply_hunks` for 2+ changes to the same file (more efficient and atomic)
+- **New files**: Use `create_file` for files that don't exist
 
 ## Project Structure
 

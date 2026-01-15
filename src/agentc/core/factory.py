@@ -20,6 +20,7 @@ from .tools import (
     glob_paths,
     search_files,
     read_file,
+    apply_hunks,
     edit_file,
     create_file,
     run_command,
@@ -27,7 +28,6 @@ from .tools import (
 from .skill_loader import SkillLoader
 from .types import RunDeps, NextAgent
 from .provider_loader import load_providers, build_model
-
 
 
 def create_agent(
@@ -78,6 +78,7 @@ def create_agent(
         Tool(read_file, takes_ctx=True),
         Tool(create_file, takes_ctx=True, requires_approval=True),
         Tool(edit_file, takes_ctx=True, requires_approval=True),
+        Tool(apply_hunks, takes_ctx=True, requires_approval=True),
         Tool(run_command, takes_ctx=True, requires_approval=True),
     ]
 
@@ -99,6 +100,11 @@ You are an expert coding assistant with comprehensive file system access and com
 - **Search when needed**: Use `search_files` to locate specific patterns across the codebase
 - **Understand context**: Use `read_file` to understand code before making changes
 - **Follow the chain**: discover → read → analyze → edit/execute
+
+## File Editing Strategy
+- **Single edit**: Use `edit_file` for one isolated change to a file
+- **Multiple edits**: Use `apply_hunks` when making 2+ changes to the same file - it's more efficient (one tool call) and atomic (all changes succeed or none apply)
+- **New files**: Use `create_file` for files that don't exist yet
 
 ## Communication Guidelines
 - **Be succinct but informative**: Provide clear, actionable responses
