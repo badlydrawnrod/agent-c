@@ -86,7 +86,7 @@ def _create_backup(path: Path) -> Path:
 def _split_lines_with_newline(text: str) -> tuple[list[str], str, bool]:
     """Split text into lines while tracking newline style and trailing newline."""
     newline = "\r\n" if "\r\n" in text else "\n"
-    trailing_newline = text.endswith("\n")
+    trailing_newline = text.endswith(newline)
     lines = text.splitlines()
     return lines, newline, trailing_newline
 

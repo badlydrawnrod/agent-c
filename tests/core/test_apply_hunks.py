@@ -142,3 +142,84 @@ def test_apply_hunks_transactional_across_files(tmp_path, mock_ctx):
     assert result.success is False
     assert file_one.read_text(encoding="utf-8") == "one\n"
     assert file_two.read_text(encoding="utf-8") == "two\n"
+
+
+def test_apply_hunks_preserves_crlf_line_endings(tmp_path, mock_ctx):
+    """Test that CRLF line endings are preserved after applying hunks."""
+    target = tmp_path / "crlf.txt"
+    target.write_text("alpha\r\nbravo\r\ncharlie\r\n", encoding="utf-8")
+
+    plan = PatchPlan(
+        files=[
+            FilePatch(
+                path=str(target),
+                hunks=[
+                    PatchHunk(
+                        anchor_before=["alpha"],
+                        remove=["bravo"],
+                        add=["BRAVO"],
+                        anchor_after=["charlie"],
+                    )
+                ],
+            )
+        ]
+    )
+
+    result = apply_hunks(mock_ctx, plan)
+
+    assert result.success is True
+    assert target.read_text(encoding="utf-8") == "alpha\r\nBRAVO\r\ncharlie\r\n"
+
+
+def test_apply_hunks_preserves_crlf_without_trailing_newline(tmp_path, mock_ctx):
+    """Test that CRLF files without trailing newlines are preserved correctly."""
+    target = tmp_path / "crlf_no_trail.txt"
+    target.write_text("alpha\r\nbravo\r\ncharlie", encoding="utf-8")
+
+    plan = PatchPlan(
+        files=[
+            FilePatch(
+                path=str(target),
+                hunks=[
+                    PatchHunk(
+                        anchor_before=["alpha"],
+                        remove=["bravo"],
+                        add=["BRAVO"],
+                        anchor_after=["charlie"],
+                    )
+                ],
+            )
+        ]
+    )
+
+    result = apply_hunks(mock_ctx, plan)
+
+    assert result.success is True
+    assert target.read_text(encoding="utf-8") == "alpha\r\nBRAVO\r\ncharlie"
+
+
+def test_apply_hunks_preserves_lf_without_trailing_newline(tmp_path, mock_ctx):
+    """Test that LF files without trailing newlines are preserved correctly."""
+    target = tmp_path / "lf_no_trail.txt"
+    target.write_text("alpha\nbravo\ncharlie", encoding="utf-8")
+
+    plan = PatchPlan(
+        files=[
+            FilePatch(
+                path=str(target),
+                hunks=[
+                    PatchHunk(
+                        anchor_before=["alpha"],
+                        remove=["bravo"],
+                        add=["BRAVO"],
+                        anchor_after=["charlie"],
+                    )
+                ],
+            )
+        ]
+    )
+
+    result = apply_hunks(mock_ctx, plan)
+
+    assert result.success is True
+    assert target.read_text(encoding="utf-8") == "alpha\nBRAVO\ncharlie"
