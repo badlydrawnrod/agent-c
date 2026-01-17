@@ -4,6 +4,8 @@ A modern code editing assistant powered by [Pydantic AI](https://ai.pydantic.dev
 
 Hugely inspired by [How to Build an Agent](https://ampcode.com/how-to-build-an-agent) by Thorsten Ball of [AmpCode](https://ampcode.com/).
 
+Agent C uses a layered, event-driven architecture - see [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design and diagrams.
+
 ## Features
 
 - **Event-Driven Architecture**: Layered design with core logic, middleware, adapters, and UI separation
@@ -225,6 +227,28 @@ uv run mypy
 uv run ruff check
 uv run ruff format
 ```
+
+## Contributing
+
+We welcome contributions. However, all contributors must follow the strict architectural and coding rules in [AGENTS.md](AGENTS.md).
+
+Before contributing:
+- Review the system design in [ARCHITECTURE.md](ARCHITECTURE.md)
+- Follow the development rules in [AGENTS.md](AGENTS.md)
+
+These rules ensure:
+- Code quality and consistency
+- Type safety (MyPy strict mode)
+- Architectural integrity (layered design)
+- Test coverage and reliability
+
+Key guidelines:
+- State which layers you're modifying before making changes
+- Add full type annotations and docstrings to all public functions
+- Maintain test coverage for all changes
+- Run `ruff check`, `mypy`, and `pytest` before submitting
+
+See [AGENTS.md](AGENTS.md) for complete development rules and [ARCHITECTURE.md](ARCHITECTURE.md) for system design details.
 
 ## License
 

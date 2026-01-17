@@ -1,5 +1,9 @@
 # Agent C Development Guide
 
+> **Note**: This guide consolidates rules from package-level documentation (2026-01-17). All architectural and coding rules apply to both human developers and AI coding assistants.
+
+**You are an automated code assistant working on Agent C in a Python 3.13+ repository. Follow these rules exactly when producing code changes. You must preserve the repository's layered, strongly-typed architecture.**
+
 ## Environment
 
 - **Python**: 3.13+ required (no legacy Python support needed)
@@ -29,35 +33,113 @@ uv run agent-c  # Launch the Textual UI
 
 ## Architecture Overview
 
-The project uses an event-driven, layered architecture:
+> For visual architecture diagrams, see the [Architecture section in README.md](README.md#architecture).
+
+The project uses an event-driven, layered architecture with clear separation of concerns:
+
+**Layer Stack**: types (core) → loop → middleware → adapter → UI
 
 ### Main Implementation (`src/agentc/`)
+
 Event-driven, layered architecture with:
-- **`core/`**: Agnostic agentic logic (types, event loop, agent factory, tools). `tools.py` uses combined ignore patterns for file discovery. `skill_loader.py` discovers `SKILL.md` files from bundled skills (installed to user data directory) and project directories.
+
+- **`core/`**: Agnostic agentic logic (types, event loop, agent factory, tools). The `tools/` package provides filesystem operations (with combined ignore patterns), file editing with atomic writes and backups, and command execution. `skill_loader.py` discovers `SKILL.md` files from bundled skills (installed to user data directory) and project directories.
+  - `types.py`: Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done), `AgentSessionProtocol`, and shared dataclasses. Also defines `CommandEffect` for effect-based command execution, plus `BackendConfig` and `ModelConfig` for backend/model presets.
+  - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs, `DEFAULT_MODEL`, `DEFAULT_PROVIDER_DIRS`). Must be UI-agnostic.
+  - `loop.py`: `AgentSession` implementing the bidirectional async generator loop and mapping pydantic_ai events to `AgentEvent`.
+  - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the model preset configured in `providers.toml` (default preset: `local-oss` on the `ollama` backend), plus the shared toolset and skills table.
+  - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`). Commands produce pure `CommandEffect` data; UIs apply effects.
+  - `tool_parsing.py`: Robust JSON/dict argument handling for tool calls.
+  - `tools/`: Tool package organized by category (see Available Tools section)
+  - `skill_loader.py`: Discovers `SKILL.md` skills from project directories (`.github/skills`, `.claude/skills`), user directory (`~/.agentc/skills`), and bundled skills (installed to platform-specific user data directory). Earlier directories take precedence.
+  - `provider_loader.py`: Discovers, loads, and merges `providers.toml` files from repo/user/bundled locations (priority: repo > user > bundled). Dynamically imports provider/model classes and builds instances with API keys, base URLs, and model params.
+
 - **`middleware/`**: Cross-cutting concerns (e.g., debouncing)
+  - `debouncing.py`: `DebouncingMiddleware` for text/thinking delta aggregation (default threshold: 40 characters, configurable).
+
 - **`adapters/`**: Bridges core event stream to specific frameworks. Owns translation logic and UI-specific message types.
+  - `textual.py`: `TextualAgentAdapter` translating `AgentEvent` to Textual messages.
+  - `console.py`: `ConsoleAgentAdapter` translating `AgentEvent` to console callbacks.
+  - `textual_messages.py`: Textual-specific `Message` types (e.g., `AgentText`, `AgentApprovalRequest`).
+  - `console_messages.py`: Console event dataclasses.
+
 - **`ui/`**: User interface implementations (Textual TUI, Console)
+  - `textual_app.py`: The main Textual `App` implementation.
+  - `widgets.py`: Reusable UI components (status bar, approval forms, etc.).
+  - `run_textual.py`: Launcher for the Textual UI (entry point: `agent-c`).
+  - `run_console.py`: Launcher for the Console UI demo (auto-approval sample prompt, entry point: `run-console`).
+
 - **`skills/`**: Bundled skills (e.g., fibonacci-number) packaged with the application
+
+### Event Flow
+
+1. **`AgentSession.run()`** streams pydantic_ai events using the current history and optional deferred tool approvals.
+2. **Core layer** maps pydantic_ai parts into `AgentEvent` items, including tool call results so UIs can display execution outcomes.
+3. **`DebouncingMiddleware`** aggregates small text/thinking deltas (buffered until threshold reached), while passing tool calls, tool results, approvals, and completion events through immediately.
+4. **Adapters** consume the debounced stream, convert events to UI messages/callback events, and perform the approval handshake by sending an `ApprovalResponse` back into the async generator via `asend`.
+
+### Command Execution
+
+User commands follow an effect-based pattern that separates parsing, execution logic, and UI concerns:
+
+1. **`CommandParser.parse(user_input)`** → `CommandResult` (parsed command with type and args)
+2. **`execute_command(result)`** → `CommandEffect | None` (pure data: new session, notification, reset flag)
+3. **UI applies the effect**: updates session, displays notification, resets state
+
+Supported commands: `/clear`, `/reset`, `/exit`, `/quit`, `/bye`, `/model <name>`, `/help`
+
+Framework-specific commands (`/exit`, unknown commands) return `None` and are handled directly by the UI layer.
+
+### Skills System
+
+`SkillLoader` scans bundled skills (installed to user data directory) and project directories (`.github/skills` and `.claude/skills` by default) for `SKILL.md` descriptors. `create_agent` injects a table of discovered skills into the system prompt, with guidance to `cd` into the skill base directory before running documented commands.
 
 ## Available Tools
 
-Agent C provides the following tools in `core/tools.py`:
+Agent C provides the following tools in the `core/tools/` package:
+
+### Filesystem Tools (`tools/filesystem.py`)
 
 - **list_files**: List directory contents with gitignore support
 - **glob_paths**: Find files matching glob patterns recursively
+  - Respects default ignore patterns and `.gitignore` if it exists in the base path
+  - Returns newline-separated relative paths; directories end with trailing slash
+  - Caps results at `MAX_TOOL_OUTPUT_LINES` (200); if truncated, a summary line is appended
 - **search_files**: Search for text in files with line-level matches
-- **read_file**: Read file with cat -n style line numbers
-- **create_file**: Create new files with atomic writes
-- **edit_file**: Replace a unique string occurrence in a file
-- **apply_hunks**: Apply structured patch hunks to one or more files atomically
+  - Case-sensitive substring checks on UTF-8 text (binary data is skipped)
+  - Returns relative paths with `path:line: text` format
+  - Respects combined ignore patterns and caps output at `MAX_TOOL_OUTPUT_LINES`
+
+### Editing Tools (`tools/editing.py`)
+
+- **read_file**: Read file with `cat -n` style line numbers
+  - Output is line-numbered (right-aligned 6-digit number, tab, then content)
+  - Trailing newline is preserved
+- **create_file**: Create new files with atomic writes (**requires approval**)
+  - Creates parent directories if needed
+  - Writes atomically via a temp file
+- **edit_file**: Replace a unique string occurrence in a file (**requires approval**)
+  - Enforces single-match requirement (raises `ModelRetry` if multiple matches)
+  - Creates timestamped backups (`.bak`) before writing
+  - Writes atomically via temp files
+- **apply_hunks**: Apply structured patch hunks to one or more files atomically (**requires approval**)
   - Uses anchor-based matching (lines before/after the edit)
   - Supports insert (empty `remove`), delete (empty `add`), and replace operations
   - Transactional: all hunks must match or no files are modified
   - Creates timestamped backups before modification
   - Returns structured JSON summary of applied changes
-- **run_command**: Execute shell commands asynchronously
 
-All tools respect `.gitignore` patterns and default ignore patterns. File operations use atomic writes via temp files.
+### Execution Tools (`tools/execution.py`)
+
+- **run_command**: Execute shell commands asynchronously (**requires approval**)
+  - Uses asyncio.create_subprocess_shell with stdin piped
+  - Returns captured output (stdout then stderr) trimmed
+
+### Security and Constraints
+
+All tools respect `.gitignore` patterns and default ignore patterns. File operations use atomic writes via temp files. The `resolve_path` function in `tools/_shared.py` serves as the primary security boundary, ensuring all file operations are sandboxed to configured root directories.
+
+Default ignore patterns: `.git/`, `__pycache__/`, `*.pyc`, `.venv/`, `node_modules/`, `.DS_Store`.
 
 ## Code Style & Architecture Rules
 
@@ -91,10 +173,20 @@ When working on `agentc`, follow these rules strictly:
 ### Testing (Mandatory)
 Maintain and update the test suite in `tests/`. Must cover:
 - `core.loop`: approval handshake, history, and tool call yielding
+- `core.factory`: agent creation with model presets
+- `core.commands`: command parsing and effect-based execution
+- `core.tool_parsing`: robust JSON argument handling
+- `core.tools`: 
+  - `test_tools_filesystem.py`: list_files, glob_paths, search_files
+  - `test_tools_editing.py`: read_file, create_file, edit_file, apply_hunks
+  - `test_tools_execution.py`: run_command
+  - `test_tool_result.py`: tool result mapping
+  - `test_ignore_logic.py`: gitignore support integration
+- `core.skill_loader`: skill discovery and skills table rendering
+- `core.provider_loader`: provider/model loading and merging
 - `middleware.debouncing`: flush logic and delta aggregation
 - `adapters.textual`: mapping to `adapters.messages`
-- `core.tool_parsing`: robust JSON argument handling
-- `core.apply_hunks`: hunk matching, insertion, deletion, transactional behavior across files
+- `adapters.console`: console event mapping and approval flow
 
 ## Development Workflow
 
@@ -163,6 +255,18 @@ When contributing to `agentc`:
 4. **Ensure async patterns**: Proper use of `async`/`await` and `asend` for handshakes
 5. **Review imports**: No circular dependencies, respect layer boundaries
 6. **Run all checks**: `ruff check`, `mypy`, and `pytest`
+
+## Verification & Outputs
+
+When making changes, include in your response:
+
+1. **`files_changed`**: Exact file paths changed
+2. **Full file contents or unified diffs** for each changed file
+3. **Test file path(s) and test contents**
+4. **One-line commit message** and brief summary explaining how layering was preserved
+5. **PR checklist status**: Run `uv run ruff check`, `uv run mypy`, and `uv run pytest tests/core/ tests/middleware/ tests/adapters/`
+
+**Deliver only the requested items.** Do not add unrelated refactors or features.
 
 ## Build and Distribution
 

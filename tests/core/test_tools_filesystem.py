@@ -1,8 +1,11 @@
+"""Tests for filesystem discovery tools (list_files, glob_paths, search_files)."""
+
 from unittest.mock import MagicMock
+
 import pytest
 from pydantic_ai import ModelRetry, RunContext
 
-from agentc.core.tools import edit_file, glob_paths, list_files, read_file, search_files
+from agentc.core.tools.filesystem import glob_paths, list_files, search_files
 from agentc.core.types import RunDeps
 
 
@@ -25,51 +28,6 @@ def test_list_files_rejects_file(tmp_path, mock_ctx):
     (tmp_path / "note.txt").write_text("hi", encoding="utf-8")
     with pytest.raises(ModelRetry):
         list_files(mock_ctx, str(tmp_path / "note.txt"))
-
-
-def test_read_file_directory_rejected(tmp_path, mock_ctx):
-    with pytest.raises(ModelRetry):
-        read_file(mock_ctx, ".")
-
-
-def test_read_file_formats_with_line_numbers(tmp_path, mock_ctx):
-    target = tmp_path / "data.txt"
-    target.write_text("alpha\nbeta\n", encoding="utf-8")
-
-    result = read_file(mock_ctx, str(target))
-
-    assert result.success is True
-    assert result.content.splitlines() == [
-        "     1\talpha",
-        "     2\tbeta",
-    ]
-    assert result.content.endswith("\n")
-
-
-def test_read_file_non_utf8_raises_modelretry(tmp_path, mock_ctx):
-    target = tmp_path / "bin.dat"
-    target.write_bytes(b"\xff\xfe")
-
-    with pytest.raises(ModelRetry):
-        read_file(mock_ctx, str(target))
-
-
-def test_edit_file_requires_unique_match_and_creates_backup(tmp_path, mock_ctx):
-    target = tmp_path / "file.txt"
-    target.write_text("one\none\n", encoding="utf-8")
-
-    with pytest.raises(ModelRetry):
-        edit_file(mock_ctx, str(target), "one", "ONE")
-
-    target.write_text("only-once\n", encoding="utf-8")
-    result = edit_file(mock_ctx, str(target), "only-once", "UPDATED")
-
-    assert result.success is True
-    assert "Edit completed" in result.content
-    assert target.read_text(encoding="utf-8") == "UPDATED\n"
-
-    backups = list(target.parent.glob("file.txt.bak.*"))
-    assert len(backups) == 1
 
 
 def test_glob_paths_basic(tmp_path, mock_ctx):

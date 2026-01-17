@@ -1,7 +1,7 @@
 """
 Agent factory for Agent C Next.
 
-This module assembles the agent using tools from `tools.py` and types from `types.py`.
+This module assembles the agent using tools and types.
 """
 
 from dataclasses import replace
@@ -15,16 +15,9 @@ from pydantic_ai import (
 )
 
 from .config import DEFAULT_MODEL
-from .tools import (
-    list_files,
-    glob_paths,
-    search_files,
-    read_file,
-    apply_hunks,
-    edit_file,
-    create_file,
-    run_command,
-)
+from .tools.filesystem import list_files, glob_paths, search_files
+from .tools.editing import read_file, create_file, edit_file, apply_hunks
+from .tools.execution import run_command
 from .skill_loader import SkillLoader
 from .types import RunDeps, NextAgent
 from .provider_loader import load_providers, build_model
