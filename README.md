@@ -4,6 +4,98 @@ A modern code editing assistant powered by [Pydantic AI](https://ai.pydantic.dev
 
 Hugely inspired by [How to Build an Agent](https://ampcode.com/how-to-build-an-agent) by Thorsten Ball of [AmpCode](https://ampcode.com/).
 
+## Architecture
+
+Agent C uses a layered, event-driven architecture that keeps concerns separated and testable.
+
+### Layered Architecture
+
+```mermaid
+graph TD
+    UI[UI Layer<br/>Textual TUI, Console]
+    Adapter[Adapter Layer<br/>textual.py, console.py]
+    Middleware[Middleware Layer<br/>debouncing.py]
+    Core[Core Layer<br/>loop.py, factory.py, commands.py]
+    Types[Types Layer<br/>types.py]
+    
+    UI --> Adapter
+    Adapter --> Middleware
+    Middleware --> Core
+    Core --> Types
+```
+
+**Key principles:**
+- **Unidirectional dependencies**: Lower layers never import from higher layers
+- **Type-driven boundaries**: All cross-layer data uses typed dataclasses from `types.py`
+- **Framework-agnostic core**: Core logic has no knowledge of UI frameworks
+
+### Event Flow
+
+```mermaid
+sequenceDiagram
+    participant UI as Textual UI
+    participant Adapter as TextualAdapter
+    participant Debounce as DebouncingMiddleware
+    participant Session as AgentSession
+    participant LLM as LLM Provider
+    
+    UI->>Session: run(prompt)
+    Session->>LLM: stream_events()
+    
+    loop Streaming Response
+        LLM-->>Session: TextPart/ThinkingPart
+        Session-->>Debounce: AgentChunk
+        Debounce-->>Adapter: Buffered AgentChunk
+        Adapter-->>UI: AgentTextMessage
+    end
+    
+    LLM-->>Session: ToolCallPart
+    Session-->>Debounce: ToolCallInfo
+    Debounce-->>Adapter: ToolCallInfo (passthrough)
+    Adapter-->>UI: AgentToolCallMessage
+    
+    LLM-->>Session: DeferredToolRequests
+    Session-->>Debounce: ApprovalRequest
+    Debounce-->>Adapter: ApprovalRequest (passthrough)
+    Adapter-->>UI: AgentApprovalRequestMessage
+    
+    UI->>Adapter: ApprovalResponse
+    Adapter->>Debounce: ApprovalResponse
+    Debounce->>Session: ApprovalResponse
+    Session->>LLM: DeferredToolResults
+    
+    LLM-->>Session: Final Response
+    Session-->>Debounce: AgentDone
+    Debounce-->>Adapter: AgentDone
+    Adapter-->>UI: AgentDoneMessage
+```
+
+### Tools Package Structure
+
+```mermaid
+graph TD
+    Tools[tools/]
+    Shared[_shared.py<br/>resolve_path<br/>security boundary]
+    FS[filesystem.py<br/>list, glob, search]
+    Edit[editing.py<br/>read, create, edit, patch]
+    Exec[execution.py<br/>run_command]
+    
+    Tools --> Shared
+    Tools --> FS
+    Tools --> Edit
+    Tools --> Exec
+    
+    FS -.uses.-> Shared
+    Edit -.uses.-> Shared
+    Exec -.uses.-> Shared
+```
+
+Tools are organized by responsibility:
+- **Shared utilities** (`_shared.py`): Path validation and security sandboxing
+- **Filesystem operations** (`filesystem.py`): Discovery and search with `.gitignore` support
+- **File editing** (`editing.py`): Read, create, modify files with atomic writes and backups
+- **Command execution** (`execution.py`): Async shell command execution
+
 ## Features
 
 - **Event-Driven Architecture**: Layered design with core logic, middleware, adapters, and UI separation
@@ -225,6 +317,26 @@ uv run mypy
 uv run ruff check
 uv run ruff format
 ```
+
+## Contributing
+
+We welcome contributions from both human developers and AI coding assistants!
+
+**All contributors (human and AI) must follow the strict architectural and coding rules in [AGENTS.md](AGENTS.md).**
+
+These rules ensure:
+- Code quality and consistency
+- Type safety (MyPy strict mode)
+- Architectural integrity (layered design)
+- Test coverage and reliability
+
+Key guidelines:
+- State which layers you're modifying before making changes
+- Add full type annotations and docstrings to all public functions
+- Maintain test coverage for all changes
+- Run `ruff check`, `mypy`, and `pytest` before submitting
+
+See [AGENTS.md](AGENTS.md) for complete development rules and architecture details.
 
 ## License
 

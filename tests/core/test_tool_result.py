@@ -7,14 +7,9 @@ import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from agentc.core.tools import (
-    list_files,
-    glob_paths,
-    search_files,
-    read_file,
-    edit_file,
-    run_command,
-)
+from agentc.core.tools.filesystem import list_files, glob_paths, search_files
+from agentc.core.tools.editing import read_file, edit_file
+from agentc.core.tools.execution import run_command
 from agentc.core.types import RunDeps, ToolResult
 from pydantic_ai import ModelRetry, RunContext
 
