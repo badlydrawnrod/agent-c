@@ -44,7 +44,10 @@ The project uses an event-driven, layered architecture with clear separation of 
 Event-driven, layered architecture with:
 
 - **`core/`**: Agnostic agentic logic (types, event loop, agent factory, tools). The `tools/` package provides filesystem operations (with combined ignore patterns), file editing with atomic writes and backups, and command execution. `skill_loader.py` discovers `SKILL.md` files from bundled skills (installed to user data directory) and project directories.
-  - `types.py`: Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done), `AgentSessionProtocol`, and shared dataclasses. Also defines `CommandEffect` for effect-based command execution, plus `BackendConfig` and `ModelConfig` for backend/model presets.
+  - `types.py`: Event-stream union (`AgentEvent`), `AgentSessionProtocol`, tool result dataclasses, and re-exports of patching types.
+  - `config_types.py`: `BackendConfig` and `ModelConfig` for provider/model presets.
+  - `command_types.py`: `CommandType`, `CommandResult`, and `CommandEffect` for command parsing/execution.
+  - `deps.py`: `RunDeps` context and `NextAgent` alias for dependency-injected agent runs.
   - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs, `DEFAULT_MODEL`, `DEFAULT_PROVIDER_DIRS`). Must be UI-agnostic.
   - `loop.py`: `AgentSession` implementing the bidirectional async generator loop and mapping pydantic_ai events to `AgentEvent`.
   - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the model preset configured in `providers.toml` (default preset: `local-oss` on the `ollama` backend), plus the shared toolset and skills table.
@@ -149,7 +152,7 @@ When working on `agentc`, follow these rules strictly:
 - **Layer stack**: types (core) / loop / middleware / adapter / UI
 - State the layer(s) you change **before** modifying code
 - No cross-layer imports from `core` to `ui`
-- If data flows across layers, add a typed dataclass to `src/agentc/core/types.py`
+- If data flows across layers, add a typed dataclass to the appropriate core module (`types.py` for events, `command_types.py` for commands, `config_types.py` for provider/model configs, `deps.py` for dependency context)
 
 ### Event-Driven Pattern
 - The run loop is a bidirectional async generator

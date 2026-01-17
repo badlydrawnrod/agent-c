@@ -28,6 +28,7 @@ from pydantic_ai.messages import (
     ToolReturnPart,
 )
 
+from .deps import NextAgent, RunDeps
 from .tool_parsing import parse_tool_args
 from .types import (
     AgentChunk,
@@ -35,8 +36,6 @@ from .types import (
     AgentSessionProtocol,
     ApprovalRequest,
     ApprovalResponse,
-    RunDeps,
-    NextAgent,
     ToolCallInfo,
     ToolCallResultInfo,
     ToolResult,

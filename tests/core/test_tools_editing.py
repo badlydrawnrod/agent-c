@@ -7,7 +7,8 @@ import pytest
 from pydantic_ai import ModelRetry, RunContext
 
 from agentc.core.tools.editing import read_file, create_file, edit_file, apply_hunks
-from agentc.core.types import FilePatch, PatchHunk, PatchPlan, RunDeps
+from agentc.core.deps import RunDeps
+from agentc.core.types import FilePatch, PatchHunk, PatchPlan
 
 
 @pytest.fixture(autouse=True)

@@ -6,7 +6,7 @@ import pytest
 from pydantic_ai import ModelRetry, RunContext
 
 from agentc.core.tools.filesystem import glob_paths, list_files, search_files
-from agentc.core.types import RunDeps
+from agentc.core.deps import RunDeps
 
 
 @pytest.fixture(autouse=True)

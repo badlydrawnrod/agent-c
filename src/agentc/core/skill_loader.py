@@ -1,12 +1,22 @@
 import re
 import shutil
+from dataclasses import dataclass
 from importlib.resources import as_file, files
 from pathlib import Path
 
 import platformdirs
 
 from .config import DEFAULT_SKILL_DIRS
-from .types import SkillMetadata
+
+
+@dataclass
+class SkillMetadata:
+    """Metadata for an agent skill."""
+
+    name: str
+    description: str
+    path: Path
+    body: str
 
 class SkillLoader:
     """Discovers and loads agent skills from multiple specialized directories."""

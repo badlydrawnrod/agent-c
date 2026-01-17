@@ -8,7 +8,7 @@ Textual application.
 from ..core.factory import create_agent
 from ..core.loop import AgentSession
 from ..core.skill_loader import SkillLoader
-from ..core.types import RunDeps
+from ..core.deps import RunDeps
 from .textual_app import TextualAgentApp
 
 

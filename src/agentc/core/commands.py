@@ -16,7 +16,9 @@ from pathlib import Path
 from .factory import create_agent
 from .loop import AgentSession
 from .provider_loader import MissingAPIKeyError
-from .types import CommandEffect, CommandResult, CommandType, ModelConfig, RunDeps
+from .command_types import CommandEffect, CommandResult, CommandType
+from .config_types import ModelConfig
+from .deps import RunDeps
 
 COMMAND_METADATA: list[dict[str, str]] = [
     {

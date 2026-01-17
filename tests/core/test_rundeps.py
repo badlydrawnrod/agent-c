@@ -1,4 +1,4 @@
-from agentc.core.types import RunDeps
+from agentc.core.deps import RunDeps
 
 def test_rundeps_consolidation(tmp_path):
     # Setup some dummy directories
