@@ -8,7 +8,7 @@ from agentc.core.provider_loader import (
     get_default_provider_dirs,
     load_providers,
 )
-from agentc.core.types import BackendConfig, ModelConfig
+from agentc.core.config_types import BackendConfig, ModelConfig
 
 
 def test_get_default_provider_dirs(tmp_path: Path) -> None:

@@ -4,7 +4,7 @@ import pytest
 from pydantic_ai import Agent
 
 from agentc.core.factory import create_agent
-from agentc.core.types import BackendConfig, ModelConfig
+from agentc.core.config_types import BackendConfig, ModelConfig
 
 
 def test_create_agent_returns_agent() -> None:

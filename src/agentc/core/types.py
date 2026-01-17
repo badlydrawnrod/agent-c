@@ -1,18 +1,15 @@
-"""Common types and dataclasses for Agent C Next.
+"""Event-stream types and session protocol for Agent C.
 
-This module provides a central location for types shared between the agentic loop,
-adapters, and the UI, helping to prevent circular dependencies and architectural leaks.
+This module defines the event union produced by the agentic loop and consumed by
+middleware/adapters, plus the session protocol. Configuration and command-related
+types live in dedicated modules for cohesion.
 """
 
 from __future__ import annotations
 
 from asyncio import Event
-from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Protocol
-
-from pydantic_ai import Agent, DeferredToolRequests
 
 from .patching.types import (
     FilePatch,
@@ -23,113 +20,6 @@ from .patching.types import (
     PatchHunk,
     PatchPlan,
 )
-
-
-
-@dataclass
-class BackendConfig:
-    """Configuration for a model backend loaded from TOML."""
-
-    name: str
-    provider_cls_path: str  # e.g., "pydantic_ai.providers.anthropic.AnthropicProvider"
-    model_cls_path: str  # e.g., "pydantic_ai.models.anthropic.AnthropicModel"
-    api_key_env: str | None = None
-    base_url: str | None = None
-
-
-@dataclass
-class ModelConfig:
-    """Configuration for a model preset bound to a backend."""
-
-    name: str
-    backend: str
-    model_name: str
-    api_key_env: str | None = None
-    base_url: str | None = None
-    params: dict[str, Any] = field(default_factory=dict)
-
-
-class CommandType(Enum):
-    """Types of user commands."""
-
-    NORMAL_INPUT = "normal"  # Regular agent input (not a command)
-    CLEAR = "clear"  # Clear conversation context
-    EXIT = "exit"  # Exit application
-    MODEL_SWITCH = "switch"  # Switch to different model preset
-    HELP = "help"  # Show available commands
-    UNKNOWN = "unknown"  # Unknown command (error)
-
-
-@dataclass
-class CommandResult:
-    """Result of parsing a user command."""
-
-    command_type: CommandType
-    args: dict[str, Any]
-
-
-@dataclass
-class CommandEffect:
-    """Effect produced by executing a command.
-
-    This dataclass represents the pure data outcome of a command execution.
-    The UI layer is responsible for interpreting and applying these effects.
-    Commands like EXIT and UNKNOWN are handled directly by the UI since they
-    require framework-specific actions.
-
-    Attributes:
-        new_session: A new agent session to replace the current one, or None.
-        notification: A message to display to the user, or None.
-        should_reset_ui: Whether the UI should clear its state.
-    """
-
-    new_session: AgentSessionProtocol | None = None
-    notification: str | None = None
-    should_reset_ui: bool = False
-
-
-@dataclass
-class SkillMetadata:
-    """Metadata for an agent skill."""
-
-    name: str
-    description: str
-    path: Path
-    body: str
-
-
-@dataclass
-class RunDeps:
-    """Dependencies for the agent run context."""
-
-    root_dirs: list[Path] = field(default_factory=list)
-    skill_dirs: list[Path] = field(default_factory=list)
-
-    def __post_init__(self) -> None:
-        """Consolidate root_dirs and skill_dirs.
-
-        Removes redundant paths (descendants) and duplicates.
-        Ensures skill_dirs are included in root_dirs so tools can access them.
-        """
-        # Ensure all skill_dirs are covered by root_dirs
-        self.root_dirs.extend(self.skill_dirs)
-
-        self.root_dirs = self._consolidate_paths(self.root_dirs)
-        self.skill_dirs = self._consolidate_paths(self.skill_dirs)
-
-    def _consolidate_paths(self, paths: list[Path]) -> list[Path]:
-        if not paths:
-            return []
-        # Resolve, remove duplicates, and sort by length (shallowest first)
-        resolved = sorted({p.resolve() for p in paths}, key=lambda p: len(p.parts))
-        unique: list[Path] = []
-        for p in resolved:
-            if not any(p.is_relative_to(parent) for parent in unique):
-                unique.append(p)
-        return unique
-
-
-type NextAgent = Agent[RunDeps, str | DeferredToolRequests]
 
 
 @dataclass

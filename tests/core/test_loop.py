@@ -13,13 +13,12 @@ from pydantic_ai.messages import (
 )
 
 from agentc.core.loop import AgentSession
+from agentc.core.deps import NextAgent, RunDeps
 from agentc.core.types import (
     AgentChunk,
     AgentDone,
     ApprovalRequest,
     ApprovalResponse,
-    RunDeps,
-    NextAgent,
     ToolCallInfo,
     ToolCallResultInfo,
     ToolResult,

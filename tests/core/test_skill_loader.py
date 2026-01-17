@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
 from agentc.core.skill_loader import SkillLoader
-from agentc.core.types import SkillMetadata
+from agentc.core.skill_loader import SkillMetadata
 
 def test_skill_loader_discovery(tmp_path):
     # Create a mock skill directory structure

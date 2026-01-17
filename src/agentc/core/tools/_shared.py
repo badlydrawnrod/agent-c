@@ -8,7 +8,8 @@ from pathlib import Path
 
 from pydantic_ai import ModelRetry, RunContext
 
-from ..types import RunDeps, ToolResult
+from ..deps import RunDeps
+from ..types import ToolResult
 
 
 def resolve_path(path_str: str, deps: RunDeps, *, must_exist: bool = True) -> Path:

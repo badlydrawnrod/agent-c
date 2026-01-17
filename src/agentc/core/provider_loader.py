@@ -7,7 +7,7 @@ from typing import Any
 
 import tomllib
 
-from .types import BackendConfig, ModelConfig
+from .config_types import BackendConfig, ModelConfig
 
 
 class MissingAPIKeyError(ValueError):

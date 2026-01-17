@@ -3,7 +3,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agentc.core.commands import CommandParser, execute_command
-from agentc.core.types import CommandResult, CommandType, ModelConfig
+from agentc.core.command_types import CommandResult, CommandType
+from agentc.core.config_types import ModelConfig
 
 
 @pytest.fixture

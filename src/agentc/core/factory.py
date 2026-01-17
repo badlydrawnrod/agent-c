@@ -19,7 +19,7 @@ from .tools.filesystem import list_files, glob_paths, search_files
 from .tools.editing import read_file, create_file, edit_file, apply_hunks
 from .tools.execution import run_command
 from .skill_loader import SkillLoader
-from .types import RunDeps, NextAgent
+from .deps import RunDeps, NextAgent
 from .provider_loader import load_providers, build_model
 
 
