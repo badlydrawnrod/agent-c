@@ -20,7 +20,7 @@ def _load_ignore_spec(base: Path) -> pathspec.PathSpec:
     gitignore_path = base / ".gitignore"
     if gitignore_path.is_file():
         patterns.extend(gitignore_path.read_text(encoding="utf-8").splitlines())
-    return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+    return pathspec.PathSpec.from_lines("gitignore", patterns)
 
 
 def list_files(ctx: RunContext[RunDeps], path: str = ".") -> ToolResult:
