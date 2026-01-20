@@ -21,6 +21,27 @@ from .patching.types import (
     PatchPlan,
 )
 
+__all__ = [
+    "AgentChunk",
+    "ToolCallInfo",
+    "ApprovalRequest",
+    "ApprovalResponse",
+    "ToolResult",
+    "ToolCallResultInfo",
+    "AgentDone",
+    "AgentEvent",
+    "AgentEventStream",
+    "AgentSessionProtocol",
+    # Re-exported patching types
+    "FilePatch",
+    "FilePatchResult",
+    "HunkApplyResult",
+    "HunkMatchOptions",
+    "PatchApplySummary",
+    "PatchHunk",
+    "PatchPlan",
+]
+
 
 @dataclass
 class AgentChunk:
