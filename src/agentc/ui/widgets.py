@@ -10,6 +10,7 @@ from typing import Any, Literal, TypeAlias, cast
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
+from textual.message import Message
 from textual.timer import Timer
 from textual.widgets import Button, Static, TextArea
 
@@ -61,6 +62,7 @@ def compute_suggestions(
         or any(alias.startswith(prefix) for alias in cmd.get("aliases", "").split(", "))
     ]
     return matches, "command"
+
 
 # UI Animation constants
 SPINNER_FRAMES: tuple[str, ...] = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
@@ -362,9 +364,7 @@ class CommandSuggestions(Static):
 
     @property
     def selected_command(self) -> str | None:
-        if not self.suggestions or not 0 <= self.selected_index < len(
-            self.suggestions
-        ):
+        if not self.suggestions or not 0 <= self.selected_index < len(self.suggestions):
             return None
 
         if self.suggestion_mode == "model":
@@ -375,11 +375,18 @@ class CommandSuggestions(Static):
         return suggestion["command"]
 
 
-
 class HistoryTextArea(TextArea):
     """TextArea with command history support and slash-command autocomplete."""
 
+    class Submitted(Message):
+        """Event message indicating that input has been submitted."""
+
+        def __init__(self, sender: "HistoryTextArea") -> None:
+            super().__init__()
+            self.sender = sender
+
     BINDINGS = [
+        ("ctrl+enter,esc+enter,ctrl+j", "submit_input", "Submit"),
         ("up", "history_up", "History Up"),
         ("down", "history_down", "History Down"),
         Binding("tab", "complete_command", "Complete", show=False),
@@ -408,6 +415,12 @@ class HistoryTextArea(TextArea):
             text, self._suggestions_widget.model_names
         )
         self._suggestions_widget.set_suggestions(suggestions, mode=mode)
+
+    def action_submit_input(self) -> None:
+        # Prevent submitting if suggestions are visible
+        if self._suggestions_widget and self._suggestions_widget.has_class("visible"):
+            return
+        self.post_message(self.Submitted(self))
 
     def action_complete_command(self) -> None:
         if self._suggestions_widget and self._suggestions_widget.has_class("visible"):

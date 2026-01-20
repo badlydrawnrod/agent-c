@@ -16,7 +16,7 @@ These primary criteria are indicators of the quality of the codebase, but ultima
 - well-structured and easy to understand
 - easy to change and extend
 
-# Additional Criteria
+## Additional Criteria
 Additional criteria include:
 - idiomatic Python 3.13
 - cyclomatic complexity

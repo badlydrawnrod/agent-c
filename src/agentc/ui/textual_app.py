@@ -77,9 +77,6 @@ class TextualAgentApp(App):
     """
 
     BINDINGS = [
-        ("ctrl+enter", "submit_input", "Submit"),
-        ("ctrl+j", "submit_input", "Submit"),
-        ("ctrl+s", "submit_input", "Submit"),
         ("escape", "cancel_operation", "Cancel"),
     ]
 
@@ -129,7 +126,31 @@ class TextualAgentApp(App):
         yield input_widget
         yield Footer()
 
-    async def action_submit_input(self) -> None:
+    def action_cancel_operation(self) -> None:
+        if self._cancellation_event is None:
+            return
+        if not self._cancellation_event.is_set():
+            self._cancellation_event.set()
+            if self._status_bar:
+                self._status_bar.set_status("Cancelling...", animate=True)
+
+    async def _create_output_widgets(
+        self, scroll: VerticalScroll
+    ) -> tuple[Static, Collapsible, Markdown]:
+        thinking_output = Static(classes="thinking")
+        thinking_output.border_title = "Thinking"
+        thinking_output.display = True
+        collapsible = Collapsible(thinking_output, collapsed=False, title="Thinking")
+        collapsible.display = False
+        await scroll.mount(collapsible)
+
+        new_md = Markdown()
+        await scroll.mount(new_md)
+
+        return thinking_output, collapsible, new_md
+
+    @on(HistoryTextArea.Submitted)
+    async def handle_submitted(self, message: HistoryTextArea.Submitted) -> None:
         input_widget = self.query_one("#input", HistoryTextArea)
         user_text = input_widget.text.strip()
 
@@ -171,29 +192,6 @@ class TextualAgentApp(App):
         input_widget.focus()
         self._cancellation_event = asyncio.Event()
         self.background_task(user_text)
-
-    def action_cancel_operation(self) -> None:
-        if self._cancellation_event is None:
-            return
-        if not self._cancellation_event.is_set():
-            self._cancellation_event.set()
-            if self._status_bar:
-                self._status_bar.set_status("Cancelling...", animate=True)
-
-    async def _create_output_widgets(
-        self, scroll: VerticalScroll
-    ) -> tuple[Static, Collapsible, Markdown]:
-        thinking_output = Static(classes="thinking")
-        thinking_output.border_title = "Thinking"
-        thinking_output.display = True
-        collapsible = Collapsible(thinking_output, collapsed=False, title="Thinking")
-        collapsible.display = False
-        await scroll.mount(collapsible)
-
-        new_md = Markdown()
-        await scroll.mount(new_md)
-
-        return thinking_output, collapsible, new_md
 
     @on(AgentThinkingMessage)
     async def handle_thinking(self, message: AgentThinkingMessage) -> None:
