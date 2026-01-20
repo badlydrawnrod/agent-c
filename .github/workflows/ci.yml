@@ -27,7 +27,7 @@ jobs:
         run: uv run ruff check
       
       - name: Run mypy
-        run: uv run mypy
+        run: uv run mypy src/agentc
       
       - name: Run pytest
         run: uv run pytest
