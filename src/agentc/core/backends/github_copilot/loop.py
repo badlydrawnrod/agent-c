@@ -1,6 +1,5 @@
 import asyncio
 from asyncio import Event
-import asyncio
 import shutil
 from typing import Dict
 
@@ -13,8 +12,7 @@ from copilot.types import (
 )
 from copilot.generated.session_events import SessionEvent, SessionEventType
 
-
-from ..core.types import (
+from ...types import (
     AgentChunk,
     AgentDone,
     AgentSessionProtocol,

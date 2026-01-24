@@ -156,7 +156,7 @@ class TestExecuteCommand:
     @patch("agentc.core.commands.create_agent")
     def test_execute_model_switch_missing_api_key(self, mock_create_agent):
         """MODEL_SWITCH with missing API key should return error notification."""
-        from agentc.core.provider_loader import MissingAPIKeyError
+        from agentc.core.backends.pydantic_ai.provider_loader import MissingAPIKeyError
 
         mock_create_agent.side_effect = MissingAPIKeyError(
             "GOOGLE_API_KEY", "gemini-flash"

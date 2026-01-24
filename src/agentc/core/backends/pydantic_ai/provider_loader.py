@@ -1,13 +1,15 @@
-"""Provider and model loading for Agent C Next."""
+"""Provider and model loading for the Pydantic_AI backend."""
 
 import os
+import sys
 from importlib import import_module
 from pathlib import Path
 from typing import Any
 
 import tomllib
 
-from .config_types import BackendConfig, ModelConfig
+from ...config import DEFAULT_PROVIDER_DIRS
+from ...config_types import BackendConfig, ModelConfig
 
 
 class MissingAPIKeyError(ValueError):
@@ -64,12 +66,10 @@ def _load_single_file(path: Path) -> tuple[dict[str, BackendConfig], dict[str, M
 def get_default_provider_dirs() -> list[Path]:
     """Return provider directories in priority order: repo, user, bundled."""
 
-    from .config import DEFAULT_PROVIDER_DIRS
-
     return [
         *DEFAULT_PROVIDER_DIRS,
         Path.home() / ".agentc",
-        Path(__file__).parent.parent,
+        Path(__file__).parent.parent.parent.parent,
     ]
 
 
@@ -99,7 +99,7 @@ def load_providers(
         merged_models |= models
 
     if not merged_backends or not merged_models:
-        default_bundled = Path(__file__).parent.parent / "providers.toml"
+        default_bundled = Path(__file__).parent.parent.parent.parent / "providers.toml"
         if not default_bundled.exists():
             raise FileNotFoundError("Bundled providers.toml not found")
         if not merged_backends:
@@ -124,14 +124,15 @@ def build_model(
     model_config: ModelConfig,
     backend_config: BackendConfig,
 ) -> tuple[Any, Any]:
-    """Build provider and model instances from configuration.
+    """Build provider and model instances from configuration."""
 
-    Model-level `api_key_env` and `base_url` override backend values when set,
-    and `params` are forwarded as keyword arguments to the model constructor.
-    """
+    get_class = _get_class
+    shim = sys.modules.get("agentc.core.provider_loader")
+    if shim and hasattr(shim, "_get_class"):
+        get_class = getattr(shim, "_get_class")
 
-    provider_cls = _get_class(backend_config.provider_cls_path)
-    model_cls = _get_class(backend_config.model_cls_path)
+    provider_cls = get_class(backend_config.provider_cls_path)
+    model_cls = get_class(backend_config.model_cls_path)
 
     api_key_env = model_config.api_key_env or backend_config.api_key_env
     base_url = model_config.base_url or backend_config.base_url
@@ -154,3 +155,12 @@ def build_model(
     )
 
     return provider, model
+
+
+__all__ = [
+    "MissingAPIKeyError",
+    "get_default_provider_dirs",
+    "load_providers",
+    "build_model",
+    "_get_class",
+]

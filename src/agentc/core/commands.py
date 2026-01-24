@@ -13,9 +13,9 @@ The module follows an effect-based pattern:
 
 from pathlib import Path
 
-from .factory import create_agent
-from .loop import AgentSession
-from .provider_loader import MissingAPIKeyError
+from .backends.pydantic_ai.factory import create_agent
+from .backends.pydantic_ai.loop import AgentSession
+from .backends.pydantic_ai.provider_loader import MissingAPIKeyError
 from .command_types import CommandEffect, CommandResult, CommandType
 from .config_types import ModelConfig
 from .deps import RunDeps

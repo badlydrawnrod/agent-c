@@ -1,26 +1,19 @@
-"""
-Agent factory for Agent C Next.
-
-This module assembles the agent using tools and types.
-"""
+"""Agent factory for the Pydantic_AI backend."""
 
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from pydantic_ai import (
-    Agent,
-    DeferredToolRequests,
-    Tool,
-)
+from pydantic_ai import Agent, DeferredToolRequests, Tool
 
-from .config import DEFAULT_MODEL
+from ...config import DEFAULT_MODEL
+from ...skill_loader import SkillLoader
+from ...deps import RunDeps
+from .types import NextAgent
+from .provider_loader import load_providers, build_model
 from .tools.filesystem import list_files, glob_paths, search_files
 from .tools.editing import read_file, create_file, edit_file, apply_hunks
 from .tools.execution import run_command
-from .skill_loader import SkillLoader
-from .deps import RunDeps, NextAgent
-from .provider_loader import load_providers, build_model
 
 
 def create_agent(
@@ -29,14 +22,8 @@ def create_agent(
     override_model_name: str | None = None,
     **model_params: Any,
 ) -> NextAgent:
-    """Factory function to create a configured agent instance.
+    """Factory function to create a configured pydantic_ai agent instance."""
 
-    Args:
-        skill_dirs: Optional skill directories to include during skill discovery.
-        model_name: Name of the model preset to load from providers.toml.
-        override_model_name: Runtime override for the model string passed to the backend.
-        **model_params: Extra model keyword arguments merged with preset params.
-    """
     loader = SkillLoader()
     if skill_dirs is None:
         skill_dirs = loader.get_default_skill_dirs()
@@ -75,7 +62,6 @@ def create_agent(
         Tool(run_command, takes_ctx=True, requires_approval=True),
     ]
 
-    # Dynamically load skills
     discovered_skills = loader.discover_skills(skill_dirs)
     skills_summary = loader.get_skills_summary(discovered_skills)
 
@@ -84,7 +70,7 @@ def create_agent(
         tools=tools,
         deps_type=RunDeps,
         output_type=str | DeferredToolRequests,  # type: ignore
-        system_prompt=f"""\
+        system_prompt=f"""
 You are an expert coding assistant with comprehensive file system access and command execution capabilities. You help users navigate, analyze, edit, and manage their codebase efficiently.
 
 ## Tool Usage Strategy
@@ -125,6 +111,4 @@ Always explain why non-ASCII characters are necessary.
     )
 
 
-__all__ = [
-    "create_agent",
-]
+__all__ = ["create_agent"]

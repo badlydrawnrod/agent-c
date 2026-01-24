@@ -34,7 +34,7 @@ from ..adapters.textual_messages import (
 )
 from ..adapters.textual import TextualAgentAdapter
 from ..core.commands import CommandParser, execute_command
-from ..core.provider_loader import load_providers
+from ..core.backends.pydantic_ai.provider_loader import load_providers
 from ..core.command_types import CommandType
 from ..core.deps import RunDeps
 from ..core.types import AgentSessionProtocol

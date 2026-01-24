@@ -19,7 +19,7 @@ from copilot.types import (
 )
 from copilot.generated.session_events import SessionEvent, SessionEventType
 
-from agentc.gh.loop import GhAgentSession
+from ..core.backends.github_copilot.loop import GhAgentSession
 
 
 async def main():

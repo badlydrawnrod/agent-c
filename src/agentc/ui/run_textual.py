@@ -5,8 +5,8 @@ Instantiates the `TextualAgentApp` with a created `Agent` and runs the
 Textual application.
 """
 
-from ..core.factory import create_agent
-from ..core.loop import AgentSession
+from ..core.backends.pydantic_ai.factory import create_agent
+from ..core.backends.pydantic_ai.loop import AgentSession
 from ..core.skill_loader import SkillLoader
 from ..core.deps import RunDeps
 from .textual_app import TextualAgentApp

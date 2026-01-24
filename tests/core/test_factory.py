@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic_ai import Agent
 
-from agentc.core.factory import create_agent
+from agentc.core.backends.pydantic_ai.factory import create_agent
 from agentc.core.config_types import BackendConfig, ModelConfig
 
 
@@ -28,9 +28,9 @@ def test_create_agent_unknown_model() -> None:
         create_agent(model_name="does-not-exist")
 
 
-@patch("agentc.core.factory.Agent")
-@patch("agentc.core.factory.load_providers")
-@patch("agentc.core.factory.build_model")
+@patch("agentc.core.backends.pydantic_ai.factory.Agent")
+@patch("agentc.core.backends.pydantic_ai.factory.load_providers")
+@patch("agentc.core.backends.pydantic_ai.factory.build_model")
 def test_create_agent_merges_params(
     mock_build_model: MagicMock, mock_load: MagicMock, mock_agent: MagicMock
 ) -> None:

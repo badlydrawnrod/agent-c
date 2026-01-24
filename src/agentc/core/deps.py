@@ -5,9 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pydantic_ai import Agent, DeferredToolRequests
-
-
 @dataclass
 class RunDeps:
     """Dependencies for the agent run context."""
@@ -39,7 +36,11 @@ class RunDeps:
         return unique
 
 
-type NextAgent = Agent[RunDeps, str | DeferredToolRequests]
+# Compatibility: re-export the Pydantic_AI-specific NextAgent alias for callers/tests
+try:
+    from agentc.core.backends.pydantic_ai.types import NextAgent  # type: ignore
+except Exception:  # pragma: no cover - fallback if backend not available
+    NextAgent = None  # type: ignore
 
 
 __all__ = ["RunDeps", "NextAgent"]

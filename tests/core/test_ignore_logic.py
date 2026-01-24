@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 import pytest
 from pydantic_ai import RunContext
-from agentc.core.tools.filesystem import glob_paths, search_files
+from agentc.core.backends.pydantic_ai.tools.filesystem import glob_paths, search_files
 from agentc.core.deps import RunDeps
 
 @pytest.fixture
