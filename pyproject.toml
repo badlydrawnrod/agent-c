@@ -5,6 +5,7 @@ description = "Agent C is a simple code editing assistant powered by Pydantic AI
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "github-copilot-sdk>=0.1.15",
     "pathspec>=0.12.1",
     "platformdirs>=4.5.0",
     "pydantic-ai>=1.6.0",
@@ -31,3 +32,4 @@ source-include = [
 agent-c = "agentc.ui.run_textual:main"
 run-console = "agentc.ui.run_console:main"
 run-textual = "agentc.ui.run_textual:main"
+run-textual-gh = "agentc.ui.run_textual_gh:main_sync"

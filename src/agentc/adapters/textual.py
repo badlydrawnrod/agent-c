@@ -41,7 +41,7 @@ class TextualAgentAdapter:
         session: AgentSessionProtocol,
         prompt: str,
         cancellation_event: asyncio.Event | None = None,
-        debounce_threshold: int = 40,
+        debounce_threshold: int = 1, # TODO: make configurable
     ):
         self._app = app
         self._session = session
