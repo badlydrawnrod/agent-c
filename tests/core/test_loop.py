@@ -13,7 +13,8 @@ from pydantic_ai.messages import (
 )
 
 from agentc.core.backends.pydantic_ai.loop import AgentSession
-from agentc.core.deps import NextAgent, RunDeps
+from agentc.core.backends.pydantic_ai.types import NextAgent
+from agentc.core.deps import RunDeps
 from agentc.core.types import (
     AgentChunk,
     AgentDone,

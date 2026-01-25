@@ -36,11 +36,4 @@ class RunDeps:
         return unique
 
 
-# Compatibility: re-export the Pydantic_AI-specific NextAgent alias for callers/tests
-try:
-    from agentc.core.backends.pydantic_ai.types import NextAgent  # type: ignore
-except Exception:  # pragma: no cover - fallback if backend not available
-    NextAgent = None  # type: ignore
-
-
-__all__ = ["RunDeps", "NextAgent"]
+__all__ = ["RunDeps"]
