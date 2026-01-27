@@ -69,15 +69,17 @@ Event-driven, layered architecture with:
   - `textual_messages.py`: Textual-specific `Message` types (e.g., `AgentText`, `AgentApprovalRequest`).
   - `console_messages.py`: Console event dataclasses.
 
-- **`ui/`**: User interface implementations (Textual TUI, Console)
+- **`ui/`**: User interface implementations (Textual TUI widgets and components)
   - `textual_app.py`: The main Textual `App` implementation.
     - Receives model names list via dependency injection from composition root
     - Each backend's entry point discovers models using backend-specific mechanisms
     - UI layer remains completely backend-agnostic
   - `widgets.py`: Reusable UI components (status bar, approval forms, etc.).
-  - `widgets.py`: Reusable UI components (status bar, approval forms, etc.).
-  - `run_textual.py`: Launcher for the Textual UI (entry point: `agent-c`).
-  - `run_console.py`: Launcher for the Console UI demo (auto-approval sample prompt, entry point: `run-console`).
+
+- **`entrypoints/`**: Application composition roots (dependency injection and bootstrapping)
+  - `run_textual.py`: Pydantic AI backend launcher (entry point: `agent-c`, `run-textual`)
+  - `run_textual_gh.py`: GitHub Copilot SDK backend launcher (entry point: `run-textual-gh`)
+  - `run_console.py`: Console UI demo launcher (entry point: `run-console`)
 
 - **`skills/`**: Bundled skills (e.g., fibonacci-number) packaged with the application
 
@@ -292,6 +294,7 @@ When making changes, include in your response:
 
 - **Build system**: `uv_build`
 - **Entry points**:
-  - `agentc.ui.run_textual:main` (agent-c command - default Textual UI)
-  - `agentc.ui.run_console:main` (run-console command)
-  - `agentc.ui.run_textual:main` (run-textual command)
+  - `agentc.entrypoints.run_textual:main` (agent-c command - default Textual UI)
+  - `agentc.entrypoints.run_console:main` (run-console command)
+  - `agentc.entrypoints.run_textual:main` (run-textual command)
+  - `agentc.entrypoints.run_textual_gh:main_sync` (run-textual-gh command)

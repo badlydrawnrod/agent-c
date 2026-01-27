@@ -29,7 +29,7 @@ source-include = [
 ]
 
 [project.scripts]
-agent-c = "agentc.ui.run_textual:main"
-run-console = "agentc.ui.run_console:main"
-run-textual = "agentc.ui.run_textual:main"
-run-textual-gh = "agentc.ui.run_textual_gh:main_sync"
+agent-c = "agentc.entrypoints.run_textual:main"
+run-console = "agentc.entrypoints.run_console:main"
+run-textual = "agentc.entrypoints.run_textual:main"
+run-textual-gh = "agentc.entrypoints.run_textual_gh:main_sync"

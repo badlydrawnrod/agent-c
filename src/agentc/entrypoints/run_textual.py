@@ -11,7 +11,7 @@ from ..core.backends.pydantic_ai.provider_loader import load_providers
 from ..core.backends.pydantic_ai.session_factory import PydanticAISessionFactory
 from ..core.skill_loader import SkillLoader
 from ..core.deps import RunDeps
-from .textual_app import TextualAgentApp
+from ..ui.textual_app import TextualAgentApp
 
 
 def main() -> None:

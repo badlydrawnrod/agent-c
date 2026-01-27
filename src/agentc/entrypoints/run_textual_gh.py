@@ -15,7 +15,7 @@ from copilot.types import (
     SystemMessageReplaceConfig,
 )
 
-from .textual_app import TextualAgentApp
+from ..ui.textual_app import TextualAgentApp
 from ..core.backends.github_copilot.session_factory import GhCopilotSessionFactory
 from ..core.command_types import SessionConfig
 from ..core.deps import RunDeps
