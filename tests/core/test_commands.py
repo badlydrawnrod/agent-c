@@ -1,9 +1,7 @@
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from agentc.core.commands import CommandParser, execute_command
-from agentc.core.command_types import CommandResult, CommandType
+from agentc.core.command_types import CommandResult, CommandType, SessionConfig
 from agentc.core.config_types import ModelConfig
 
 
@@ -87,36 +85,30 @@ def test_command_metadata_structure():
 class TestExecuteCommand:
     """Tests for the execute_command function."""
 
-    @patch("agentc.core.commands.create_agent")
-    def test_execute_clear_returns_effect(self, mock_create_agent):
-        """CLEAR command should return effect with new session and notification."""
-        mock_create_agent.return_value = MagicMock()
-        
+    def test_execute_clear_returns_effect(self):
+        """CLEAR command should return effect with session config and notification."""
         result = CommandResult(CommandType.CLEAR, {})
         effect = execute_command(result)
 
         assert effect is not None
-        assert effect.new_session is not None
+        assert effect.session_config is not None
+        assert isinstance(effect.session_config, SessionConfig)
+        assert effect.session_config.clear_history is True
         assert effect.notification == "Conversation cleared"
         assert effect.should_reset_ui is True
-        mock_create_agent.assert_called_once()
 
-    @patch("agentc.core.commands.create_agent")
-    def test_execute_model_switch_returns_effect(self, mock_create_agent):
-        """MODEL_SWITCH command should return effect with new session."""
-        mock_create_agent.return_value = MagicMock()
-
+    def test_execute_model_switch_returns_effect(self):
+        """MODEL_SWITCH command should return effect with session config."""
         result = CommandResult(CommandType.MODEL_SWITCH, {"model": "claude"})
         effect = execute_command(result)
 
         assert effect is not None
-        assert effect.new_session is not None
+        assert effect.session_config is not None
+        assert isinstance(effect.session_config, SessionConfig)
+        assert effect.session_config.model_name == "claude"
+        assert effect.session_config.clear_history is True
         assert effect.notification == "Switched to model: claude"
         assert effect.should_reset_ui is True
-        
-        # Verify create_agent was called with correct model
-        call_kwargs = mock_create_agent.call_args.kwargs
-        assert call_kwargs.get("model_name") == "claude"
 
     def test_execute_exit_returns_none(self):
         """EXIT command should return None (handled by UI)."""
@@ -153,20 +145,23 @@ class TestExecuteCommand:
         assert "/help" in effect.notification
         assert effect.should_reset_ui is False
 
-    @patch("agentc.core.commands.create_agent")
-    def test_execute_model_switch_missing_api_key(self, mock_create_agent):
-        """MODEL_SWITCH with missing API key should return error notification."""
-        from agentc.core.backends.pydantic_ai.provider_loader import MissingAPIKeyError
 
-        mock_create_agent.side_effect = MissingAPIKeyError(
-            "GOOGLE_API_KEY", "gemini-flash"
-        )
+def test_session_config_structure():
+    """Test SessionConfig dataclass structure."""
+    from pathlib import Path
 
-        result = CommandResult(CommandType.MODEL_SWITCH, {"model": "gemini-flash"})
-        effect = execute_command(result)
+    from agentc.core.deps import RunDeps
 
-        assert effect is not None
-        assert effect.new_session is None
-        assert "GOOGLE_API_KEY" in effect.notification
-        assert effect.should_reset_ui is False
+    deps = RunDeps(root_dirs=[Path("/tmp")])
+    config = SessionConfig(
+        model_name="test-model",
+        clear_history=True,
+        skill_dirs=[Path("/skills")],
+        deps=deps,
+    )
+
+    assert config.model_name == "test-model"
+    assert config.clear_history is True
+    assert config.skill_dirs == [Path("/skills")]
+    assert config.deps == deps
 

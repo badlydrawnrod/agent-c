@@ -51,7 +51,7 @@ Event-driven, layered architecture with:
   - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs, `DEFAULT_MODEL`, `DEFAULT_PROVIDER_DIRS`). Must be UI-agnostic.
   - `loop.py`: `AgentSession` implementing the bidirectional async generator loop and mapping pydantic_ai events to `AgentEvent`.
   - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the model preset configured in `providers.toml` (default preset: `local-oss` on the `ollama` backend), plus the shared toolset and skills table.
-  - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`). Commands produce pure `CommandEffect` data; UIs apply effects.
+  - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`). Commands produce pure `CommandEffect` data containing `SessionConfig`; session factories apply configuration to create new sessions.
   - `tool_parsing.py`: Robust JSON/dict argument handling for tool calls.
   - `tools/`: Tool package organized by category (see Available Tools section)
   - `skill_loader.py`: Discovers `SKILL.md` skills from project directories (`.github/skills`, `.claude/skills`), user directory (`~/.agentc/skills`), and bundled skills (installed to platform-specific user data directory). Earlier directories take precedence.
@@ -92,6 +92,16 @@ User commands follow an effect-based pattern that separates parsing, execution l
 Supported commands: `/clear`, `/reset`, `/exit`, `/quit`, `/bye`, `/model <name>`, `/help`
 
 Framework-specific commands (`/exit`, unknown commands) return `None` and are handled directly by the UI layer.
+
+### Session Factory Pattern
+
+Commands produce `SessionConfig` (pure data), which session factories translate into backend-specific sessions:
+
+- **`SessionFactoryProtocol`** (`types.py`): Interface for session creation
+- **`PydanticAISessionFactory`** (`backends/pydantic_ai/`): Uses `create_agent()` + `AgentSession`
+- **`GhCopilotSessionFactory`** (`backends/github_copilot/`): Uses `CopilotClient.create_session()`
+
+Entry points inject concrete factories into the UI layer, which uses the Protocol abstraction.
 
 ### Skills System
 

@@ -13,10 +13,7 @@ The module follows an effect-based pattern:
 
 from pathlib import Path
 
-from .backends.pydantic_ai.factory import create_agent
-from .backends.pydantic_ai.loop import AgentSession
-from .backends.pydantic_ai.provider_loader import MissingAPIKeyError
-from .command_types import CommandEffect, CommandResult, CommandType
+from .command_types import CommandEffect, CommandResult, CommandType, SessionConfig
 from .config_types import ModelConfig
 from .deps import RunDeps
 
@@ -140,7 +137,6 @@ class CommandParser:
 
 def execute_command(
     result: CommandResult,
-    model_name: str | None = None,
     deps: RunDeps | None = None,
 ) -> CommandEffect | None:
     """Execute a command and return its effect.
@@ -151,7 +147,7 @@ def execute_command(
 
     Args:
         result: The parsed command result from CommandParser.
-        model_name: Optional model name for MODEL_SWITCH command.
+        deps: Runtime dependencies (root_dirs, skill_dirs).
 
     Returns:
         CommandEffect describing what should happen, or None if the
@@ -162,29 +158,27 @@ def execute_command(
     match result.command_type:
         case CommandType.CLEAR:
             return CommandEffect(
-                new_session=AgentSession(
-                    agent=create_agent(skill_dirs=skill_dirs), deps=deps
+                session_config=SessionConfig(
+                    clear_history=True,
+                    skill_dirs=skill_dirs,
+                    deps=deps,
                 ),
                 notification="Conversation cleared",
                 should_reset_ui=True,
             )
 
         case CommandType.MODEL_SWITCH:
-            model = result.args.get("model", model_name)
-            try:
-                return CommandEffect(
-                    new_session=AgentSession(
-                        agent=create_agent(model_name=model, skill_dirs=skill_dirs),
-                        deps=deps,
-                    ),
-                    notification=f"Switched to model: {model}",
-                    should_reset_ui=True,
-                )
-            except MissingAPIKeyError as e:
-                return CommandEffect(
-                    notification=str(e),
-                    should_reset_ui=False,
-                )
+            model = result.args.get("model")
+            return CommandEffect(
+                session_config=SessionConfig(
+                    model_name=model,
+                    clear_history=True,
+                    skill_dirs=skill_dirs,
+                    deps=deps,
+                ),
+                notification=f"Switched to model: {model}",
+                should_reset_ui=True,
+            )
 
         case CommandType.HELP:
             help_lines = ["Available Commands:"]

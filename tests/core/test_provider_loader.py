@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agentc.core.backends.pydantic_ai.provider_loader import (
-    MissingAPIKeyError,
     build_model,
     get_default_provider_dirs,
     load_providers,

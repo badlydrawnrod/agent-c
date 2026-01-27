@@ -7,6 +7,7 @@ Textual application.
 
 from ..core.backends.pydantic_ai.factory import create_agent
 from ..core.backends.pydantic_ai.loop import AgentSession
+from ..core.backends.pydantic_ai.session_factory import PydanticAISessionFactory
 from ..core.skill_loader import SkillLoader
 from ..core.deps import RunDeps
 from .textual_app import TextualAgentApp
@@ -20,8 +21,13 @@ def main() -> None:
     skill_dirs = loader.get_default_skill_dirs()
 
     deps = RunDeps(root_dirs=[Path.cwd()], skill_dirs=skill_dirs)
+    session_factory = PydanticAISessionFactory()
     session = AgentSession(agent=create_agent(skill_dirs=deps.skill_dirs), deps=deps)
-    app = TextualAgentApp(session=session, deps=deps)
+    app = TextualAgentApp(
+        session=session,
+        session_factory=session_factory,
+        deps=deps,
+    )
     app.run()
 
 
