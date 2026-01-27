@@ -51,7 +51,10 @@ Event-driven, layered architecture with:
   - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs, `DEFAULT_MODEL`, `DEFAULT_PROVIDER_DIRS`). Must be UI-agnostic.
   - `loop.py`: `AgentSession` implementing the bidirectional async generator loop and mapping pydantic_ai events to `AgentEvent`.
   - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the model preset configured in `providers.toml` (default preset: `local-oss` on the `ollama` backend), plus the shared toolset and skills table.
-  - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`). Commands produce pure `CommandEffect` data containing `SessionConfig`; session factories apply configuration to create new sessions.
+  - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`).
+    - `CommandParser` performs pure parsing without validation
+    - Commands produce pure `CommandEffect` data containing `SessionConfig`
+    - Session factories validate model names and apply configuration to create new sessions
   - `tool_parsing.py`: Robust JSON/dict argument handling for tool calls.
   - `tools/`: Tool package organized by category (see Available Tools section)
   - `skill_loader.py`: Discovers `SKILL.md` skills from project directories (`.github/skills`, `.claude/skills`), user directory (`~/.agentc/skills`), and bundled skills (installed to platform-specific user data directory). Earlier directories take precedence.
@@ -68,6 +71,10 @@ Event-driven, layered architecture with:
 
 - **`ui/`**: User interface implementations (Textual TUI, Console)
   - `textual_app.py`: The main Textual `App` implementation.
+    - Receives model names list via dependency injection from composition root
+    - Each backend's entry point discovers models using backend-specific mechanisms
+    - UI layer remains completely backend-agnostic
+  - `widgets.py`: Reusable UI components (status bar, approval forms, etc.).
   - `widgets.py`: Reusable UI components (status bar, approval forms, etc.).
   - `run_textual.py`: Launcher for the Textual UI (entry point: `agent-c`).
   - `run_console.py`: Launcher for the Console UI demo (auto-approval sample prompt, entry point: `run-console`).

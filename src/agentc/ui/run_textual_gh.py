@@ -48,8 +48,13 @@ async def main() -> None:
     client = CopilotClient({"cli_path": cli_path})
     await client.start()
 
-    # This prompt replaces the system message, but leaves tools and skills intact.
-    system_message_config = SystemMessageReplaceConfig(
+    try:
+        # Discover available models from GitHub Copilot SDK
+        model_infos = await client.list_models()
+        model_names = [model["id"] for model in model_infos]  # type: ignore
+
+        # This prompt replaces the system message, but leaves tools and skills intact.
+        system_message_config = SystemMessageReplaceConfig(
         mode="replace",
         content=f"""\
 # Instructions
@@ -81,17 +86,17 @@ You are working in the following environment. You do not need to make additional
 * Current working directory: {Path.cwd()}
 </environment_context>
 """,
-    )
+        )
 
-    # Create a session.
-    model = "gpt-5 mini"
-    # model = "Claude Haiku 4.5"
-    # provider_config = ProviderConfig(
-    #     type="openai", wire_api="completions", base_url="http://localhost:11434/v1"
-    # )
-    # model = "gpt-oss:20b"
-    is_streaming = True
-    session_config = CopilotSessionConfig(
+        # Create a session.
+        model = "gpt-5 mini"
+        # model = "Claude Haiku 4.5"
+        # provider_config = ProviderConfig(
+        #     type="openai", wire_api="completions", base_url="http://localhost:11434/v1"
+        # )
+        # model = "gpt-oss:20b"
+        is_streaming = True
+        session_config = CopilotSessionConfig(
         model=model,  # type: ignore
         on_permission_request=on_permission_request,
         # provider=provider_config,
@@ -100,24 +105,26 @@ You are working in the following environment. You do not need to make additional
         system_message=system_message_config,
     )
 
-    session_factory = GhCopilotSessionFactory(client, session_config)
-    agent_session = await session_factory.create_session(
-        SessionConfig(
-            model_name=model,
-            skill_dirs=skill_dirs,
+        session_factory = GhCopilotSessionFactory(client, session_config)
+        agent_session = await session_factory.create_session(
+            SessionConfig(
+                model_name=model,
+                skill_dirs=skill_dirs,
+                deps=deps,
+            )
+        )
+        app = TextualAgentApp(
+            session=agent_session,
+            session_factory=session_factory,
+            model_names=model_names,
             deps=deps,
         )
-    )
-    app = TextualAgentApp(
-        session=agent_session,
-        session_factory=session_factory,
-        deps=deps,
-    )
-    await app.run_async()
+        await app.run_async()
 
-    # Clean up.
-    await session_factory.cleanup()
-    await client.stop()
+        # Clean up.
+        await session_factory.cleanup()
+    finally:
+        await client.stop()
 
 
 def main_sync():

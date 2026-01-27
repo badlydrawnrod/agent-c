@@ -2,28 +2,11 @@ import pytest
 
 from agentc.core.commands import CommandParser, execute_command
 from agentc.core.command_types import CommandResult, CommandType, SessionConfig
-from agentc.core.config_types import ModelConfig
 
 
 @pytest.fixture
-def mock_models():
-    return {
-        "ollama-gpt-oss-120b": ModelConfig(
-            name="ollama-gpt-oss-120b",
-            backend="ollama",
-            model_name="gpt-oss",
-        ),
-        "claude": ModelConfig(
-            name="claude",
-            backend="anthropic",
-            model_name="claude-3",
-        ),
-    }
-
-
-@pytest.fixture
-def parser(mock_models):
-    return CommandParser(mock_models)
+def parser():
+    return CommandParser()
 
 def test_parse_normal_input(parser):
     result = parser.parse("hello agent")
@@ -49,10 +32,12 @@ def test_parse_model_switch_success(parser):
     assert result.command_type == CommandType.MODEL_SWITCH
     assert result.args["model"] == "claude"
 
-def test_parse_model_switch_unknown(parser):
-    result = parser.parse("/model unknown-llm")
-    assert result.command_type == CommandType.UNKNOWN
-    assert "Unknown model" in result.args["error"]
+
+def test_parse_model_switch_any_name(parser):
+    """Test /model accepts any model name (validation happens in factory)."""
+    result = parser.parse("/model any-model-name")
+    assert result.command_type == CommandType.MODEL_SWITCH
+    assert result.args["model"] == "any-model-name"
 
 def test_parse_unknown_command(parser):
     result = parser.parse("/invalid command")

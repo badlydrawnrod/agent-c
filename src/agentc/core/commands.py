@@ -56,21 +56,19 @@ def _skill_dirs_from_deps(deps: RunDeps | None) -> list[Path] | None:
 
 
 class CommandParser:
-    """Centralized command parsing and validation.
+    """Centralized command parsing.
 
     Responsibilities:
     - Parse user input into structured commands
-    - Validate commands (e.g., provider names)
     - Return structured results for callers to act on
+    
+    Note: Model name validation happens in the session factory,
+    not during parsing. This keeps the parser pure and backend-agnostic.
     """
 
-    def __init__(self, models: dict[str, ModelConfig]):
-        """Initialize parser with available providers.
-
-        Args:
-            models: Dict of model preset names to ModelConfig.
-        """
-        self.models = models
+    def __init__(self) -> None:
+        """Initialize the command parser."""
+        pass
 
     def parse(self, user_input: str) -> CommandResult:
         """Parse user input into structured command.
@@ -110,19 +108,11 @@ class CommandParser:
         parts = command.split(maxsplit=1)
         if len(parts) >= 2 and parts[0] == "/model":
             model_name = parts[1].strip()
-            if model_name in self.models:
-                return CommandResult(
-                    CommandType.MODEL_SWITCH,
-                    {"model": model_name},
-                )
-            else:
-                return CommandResult(
-                    CommandType.UNKNOWN,
-                    {
-                        "input": command,
-                        "error": f"Unknown model: {model_name}",
-                    },
-                )
+            # Model validation happens in session factory
+            return CommandResult(
+                CommandType.MODEL_SWITCH,
+                {"model": model_name},
+            )
 
         # Unknown command (starts with / but not recognized)
         if command.startswith("/"):

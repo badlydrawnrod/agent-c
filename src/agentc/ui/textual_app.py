@@ -34,7 +34,6 @@ from ..adapters.textual_messages import (
 )
 from ..adapters.textual import TextualAgentAdapter
 from ..core.commands import CommandParser, execute_command
-from ..core.backends.pydantic_ai.provider_loader import load_providers
 from ..core.command_types import CommandEffect, CommandType
 from ..core.deps import RunDeps
 from ..core.types import AgentSessionProtocol, SessionFactoryProtocol
@@ -84,9 +83,18 @@ class TextualAgentApp(App):
         self,
         session: AgentSessionProtocol,
         session_factory: SessionFactoryProtocol,
+        model_names: list[str],
         deps: RunDeps | None = None,
         **kwargs,
     ):
+        """Initialize the Textual agent application.
+
+        Args:
+            session: Initial agent session.
+            session_factory: Factory for creating new sessions.
+            model_names: List of available model names for autocomplete.
+            deps: Runtime dependencies (root directories, skill directories).
+        """
         super().__init__(**kwargs)
         self._session = session
         self._session_factory = session_factory
@@ -100,9 +108,8 @@ class TextualAgentApp(App):
         self._thinking_output: Static | None = None
         self._stream_writer: Any | None = None
         self._thinking_text = ""
-        _, models = load_providers()
-        self._model_names = sorted(models.keys())
-        self.command_parser = CommandParser(models)
+        self._model_names = model_names
+        self.command_parser = CommandParser()
 
     async def _reset_ui_state(self) -> None:
         """Clear the scroll area and reset tracking variables."""
