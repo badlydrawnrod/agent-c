@@ -14,7 +14,6 @@ The module follows an effect-based pattern:
 from pathlib import Path
 
 from .command_types import CommandEffect, CommandResult, CommandType, SessionConfig
-from .config_types import ModelConfig
 from .deps import RunDeps
 
 COMMAND_METADATA: list[dict[str, str]] = [

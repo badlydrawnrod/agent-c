@@ -1,23 +1,13 @@
 import asyncio
 from asyncio import Event
-import shutil
-from typing import Dict
 
-from copilot import CopilotClient, CopilotSession
-from copilot.types import (
-    PermissionRequest,
-    PermissionRequestResult,
-    ProviderConfig,
-    SessionConfig,
-)
+from copilot import CopilotSession
 from copilot.generated.session_events import SessionEvent, SessionEventType
 
 from ...types import (
     AgentChunk,
     AgentDone,
     AgentSessionProtocol,
-    ApprovalRequest,
-    ApprovalResponse,
     ToolCallInfo,
     ToolCallResultInfo,
     ToolResult,
