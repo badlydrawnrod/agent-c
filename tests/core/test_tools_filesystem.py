@@ -5,7 +5,11 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic_ai import ModelRetry, RunContext
 
-from agentc.core.tools.filesystem import glob_paths, list_files, search_files
+from agentc.core.backends.pydantic_ai.tools.filesystem import (
+    glob_paths,
+    list_files,
+    search_files,
+)
 from agentc.core.deps import RunDeps
 
 

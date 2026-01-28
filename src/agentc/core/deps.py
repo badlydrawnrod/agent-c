@@ -5,9 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pydantic_ai import Agent, DeferredToolRequests
-
-
 @dataclass
 class RunDeps:
     """Dependencies for the agent run context."""
@@ -39,7 +36,4 @@ class RunDeps:
         return unique
 
 
-type NextAgent = Agent[RunDeps, str | DeferredToolRequests]
-
-
-__all__ = ["RunDeps", "NextAgent"]
+__all__ = ["RunDeps"]

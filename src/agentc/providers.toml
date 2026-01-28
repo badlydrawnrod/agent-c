@@ -37,6 +37,14 @@ model_name = "gpt-oss:120b-cloud"
 backend = "ollama"
 model_name = "gpt-oss:20b"
 
+[models.ollama-kimi-k2-5]
+backend = "ollama"
+model_name = "kimi-k2.5:cloud"
+
+[models.ollama-glm-4-7]
+backend = "ollama"
+model_name = "glm-4.7:cloud"
+
 [models.gpt-4o-mini]
 backend = "openai"
 model_name = "gpt-4o-mini"

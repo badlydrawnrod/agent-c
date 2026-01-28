@@ -18,8 +18,8 @@ from ..adapters.console_messages import (
     ConsoleToolCallEvent,
     ConsoleToolResultEvent,
 )
-from ..core.factory import create_agent
-from ..core.loop import AgentSession
+from ..core.backends.pydantic_ai.factory import create_agent
+from ..core.backends.pydantic_ai.loop import AgentSession
 from ..core.skill_loader import SkillLoader
 from ..core.deps import RunDeps
 from ..core.types import ApprovalResponse

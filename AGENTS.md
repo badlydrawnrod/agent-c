@@ -47,11 +47,14 @@ Event-driven, layered architecture with:
   - `types.py`: Event-stream union (`AgentEvent`), `AgentSessionProtocol`, tool result dataclasses, and re-exports of patching types.
   - `config_types.py`: `BackendConfig` and `ModelConfig` for provider/model presets.
   - `command_types.py`: `CommandType`, `CommandResult`, and `CommandEffect` for command parsing/execution.
-  - `deps.py`: `RunDeps` context and `NextAgent` alias for dependency-injected agent runs.
+  - `deps.py`: `RunDeps` context for dependency-injected agent runs.
   - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs, `DEFAULT_MODEL`, `DEFAULT_PROVIDER_DIRS`). Must be UI-agnostic.
   - `loop.py`: `AgentSession` implementing the bidirectional async generator loop and mapping pydantic_ai events to `AgentEvent`.
   - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the model preset configured in `providers.toml` (default preset: `local-oss` on the `ollama` backend), plus the shared toolset and skills table.
-  - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`). Commands produce pure `CommandEffect` data; UIs apply effects.
+  - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`).
+    - `CommandParser` performs pure parsing without validation
+    - Commands produce pure `CommandEffect` data containing `SessionConfig`
+    - Session factories validate model names and apply configuration to create new sessions
   - `tool_parsing.py`: Robust JSON/dict argument handling for tool calls.
   - `tools/`: Tool package organized by category (see Available Tools section)
   - `skill_loader.py`: Discovers `SKILL.md` skills from project directories (`.github/skills`, `.claude/skills`), user directory (`~/.agentc/skills`), and bundled skills (installed to platform-specific user data directory). Earlier directories take precedence.
@@ -66,11 +69,17 @@ Event-driven, layered architecture with:
   - `textual_messages.py`: Textual-specific `Message` types (e.g., `AgentText`, `AgentApprovalRequest`).
   - `console_messages.py`: Console event dataclasses.
 
-- **`ui/`**: User interface implementations (Textual TUI, Console)
+- **`ui/`**: User interface implementations (Textual TUI widgets and components)
   - `textual_app.py`: The main Textual `App` implementation.
+    - Receives model names list via dependency injection from composition root
+    - Each backend's entry point discovers models using backend-specific mechanisms
+    - UI layer remains completely backend-agnostic
   - `widgets.py`: Reusable UI components (status bar, approval forms, etc.).
-  - `run_textual.py`: Launcher for the Textual UI (entry point: `agent-c`).
-  - `run_console.py`: Launcher for the Console UI demo (auto-approval sample prompt, entry point: `run-console`).
+
+- **`entrypoints/`**: Application composition roots (dependency injection and bootstrapping)
+  - `run_textual.py`: Pydantic AI backend launcher (entry point: `agent-c`, `run-textual`)
+  - `run_textual_gh.py`: GitHub Copilot SDK backend launcher (entry point: `run-textual-gh`)
+  - `run_console.py`: Console UI demo launcher (entry point: `run-console`)
 
 - **`skills/`**: Bundled skills (e.g., fibonacci-number) packaged with the application
 
@@ -92,6 +101,16 @@ User commands follow an effect-based pattern that separates parsing, execution l
 Supported commands: `/clear`, `/reset`, `/exit`, `/quit`, `/bye`, `/model <name>`, `/help`
 
 Framework-specific commands (`/exit`, unknown commands) return `None` and are handled directly by the UI layer.
+
+### Session Factory Pattern
+
+Commands produce `SessionConfig` (pure data), which session factories translate into backend-specific sessions:
+
+- **`SessionFactoryProtocol`** (`types.py`): Interface for session creation
+- **`PydanticAISessionFactory`** (`backends/pydantic_ai/`): Uses `create_agent()` + `AgentSession`
+- **`GhCopilotSessionFactory`** (`backends/github_copilot/`): Uses `CopilotClient.create_session()`
+
+Entry points inject concrete factories into the UI layer, which uses the Protocol abstraction.
 
 ### Skills System
 
@@ -275,6 +294,7 @@ When making changes, include in your response:
 
 - **Build system**: `uv_build`
 - **Entry points**:
-  - `agentc.ui.run_textual:main` (agent-c command - default Textual UI)
-  - `agentc.ui.run_console:main` (run-console command)
-  - `agentc.ui.run_textual:main` (run-textual command)
+  - `agentc.entrypoints.run_textual:main` (agent-c command - default Textual UI)
+  - `agentc.entrypoints.run_console:main` (run-console command)
+  - `agentc.entrypoints.run_textual:main` (run-textual command)
+  - `agentc.entrypoints.run_textual_gh:main_sync` (run-textual-gh command)

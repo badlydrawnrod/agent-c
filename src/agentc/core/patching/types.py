@@ -37,6 +37,7 @@ class PatchPlan:
     """Structured patch plan for multiple files."""
 
     files: list[FilePatch] = field(default_factory=list)
+    updates: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

@@ -34,10 +34,9 @@ from ..adapters.textual_messages import (
 )
 from ..adapters.textual import TextualAgentAdapter
 from ..core.commands import CommandParser, execute_command
-from ..core.provider_loader import load_providers
-from ..core.command_types import CommandType
+from ..core.command_types import CommandEffect, CommandType
 from ..core.deps import RunDeps
-from ..core.types import AgentSessionProtocol
+from ..core.types import AgentSessionProtocol, SessionFactoryProtocol
 
 
 class TextualAgentApp(App):
@@ -83,11 +82,22 @@ class TextualAgentApp(App):
     def __init__(
         self,
         session: AgentSessionProtocol,
+        session_factory: SessionFactoryProtocol,
+        model_names: list[str],
         deps: RunDeps | None = None,
         **kwargs,
     ):
+        """Initialize the Textual agent application.
+
+        Args:
+            session: Initial agent session.
+            session_factory: Factory for creating new sessions.
+            model_names: List of available model names for autocomplete.
+            deps: Runtime dependencies (root directories, skill directories).
+        """
         super().__init__(**kwargs)
         self._session = session
+        self._session_factory = session_factory
         self._deps = deps or RunDeps()
         self._cancellation_event: asyncio.Event | None = None
         self._pending_tool_widgets: dict[str, ToolCallWidget] = {}
@@ -98,9 +108,8 @@ class TextualAgentApp(App):
         self._thinking_output: Static | None = None
         self._stream_writer: Any | None = None
         self._thinking_text = ""
-        _, models = load_providers()
-        self._model_names = sorted(models.keys())
-        self.command_parser = CommandParser(models)
+        self._model_names = model_names
+        self.command_parser = CommandParser()
 
     async def _reset_ui_state(self) -> None:
         """Clear the scroll area and reset tracking variables."""
@@ -173,17 +182,7 @@ class TextualAgentApp(App):
         effect = execute_command(result, deps=self._deps)
         if effect is not None:
             input_widget.clear()
-            if effect.should_reset_ui:
-                await self._reset_ui_state()
-            if effect.new_session is not None:
-                self._session = effect.new_session
-            if effect.notification:
-                # If no new session was created but we have a notification,
-                # it's likely an error (e.g., missing API key)
-                if effect.new_session is None and not effect.should_reset_ui:
-                    self.notify(effect.notification, severity="error")
-                else:
-                    self.notify(effect.notification)
+            await self._apply_command_effect(effect)
             return
 
         # Normal input.
@@ -255,6 +254,28 @@ class TextualAgentApp(App):
             self._scroll.anchor(anchor=True)
 
         await self._reset_output()
+
+    async def _apply_command_effect(self, effect: CommandEffect) -> None:
+        """Apply a command effect using the injected session factory.
+
+        Args:
+            effect: The effect to apply (from execute_command).
+        """
+        if effect.should_reset_ui:
+            await self._reset_ui_state()
+
+        if effect.session_config is not None:
+            try:
+                self._session = await self._session_factory.create_session(
+                    effect.session_config
+                )
+                if effect.notification:
+                    self.notify(effect.notification)
+            except Exception as exc:  # pragma: no cover - UI surface error handling
+                error_msg = effect.notification or str(exc)
+                self.notify(f"Error: {error_msg}", severity="error")
+        elif effect.notification:
+            self.notify(effect.notification)
 
     async def _reset_output(self) -> None:
         if self._collapsible:

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 from pydantic_ai import RunContext
 
-from agentc.core.tools.execution import run_command
+from agentc.core.backends.pydantic_ai.tools.execution import run_command
 from agentc.core.deps import RunDeps
 from agentc.core.types import ToolResult
 

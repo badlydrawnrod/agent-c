@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agentc.core.provider_loader import (
+from agentc.core.backends.pydantic_ai.provider_loader import (
     build_model,
     get_default_provider_dirs,
     load_providers,
@@ -124,7 +124,7 @@ def test_build_model_prefers_model_overrides(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("MODEL_KEY", "model-secret")
     monkeypatch.setenv("BACKEND_KEY", "backend-secret")
 
-    with patch("agentc.core.provider_loader._get_class", side_effect=get_class_side_effect):
+    with patch("agentc.core.backends.pydantic_ai.provider_loader._get_class", side_effect=get_class_side_effect):
         provider, _ = build_model(model, backend)
 
     mock_provider_cls.assert_called_once_with(

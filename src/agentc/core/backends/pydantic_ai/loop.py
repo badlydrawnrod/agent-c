@@ -1,10 +1,8 @@
 """
-Agent runtime utilities for Agent C Next.
+Pydantic_AI agent runtime utilities for Agent C.
 
-Provides simple file-oriented tools, an `Agent` factory, event types used
-by the UI, and an async streaming run loop that yields pydantic_ai
-events (text/thinking parts, tool approval requests) and handles the
-tool-approval flow.
+Maps pydantic_ai streaming events to core AgentEvent types and handles the
+approval handshake.
 """
 
 import asyncio
@@ -28,27 +26,24 @@ from pydantic_ai.messages import (
     ToolReturnPart,
 )
 
-from .deps import NextAgent, RunDeps
-from .tool_parsing import parse_tool_args
-from .types import (
+from ...deps import RunDeps
+from ...tool_parsing import parse_tool_args
+from ...types import (
     AgentChunk,
     AgentDone,
+    AgentEventStream,
     AgentSessionProtocol,
     ApprovalRequest,
     ApprovalResponse,
     ToolCallInfo,
     ToolCallResultInfo,
     ToolResult,
-    AgentEventStream,
 )
+from .types import NextAgent
 
 
 class AgentSession(AgentSessionProtocol):
-    """
-    Encapsulates the state of an agentic session.
-
-    This class keeps the history and agent implementation details opaque to the UI.
-    """
+    """Encapsulates the state of a pydantic_ai agentic session."""
 
     def __init__(
         self,
@@ -75,7 +70,7 @@ class AgentSession(AgentSessionProtocol):
         self._history = history
 
     def _map_event_to_chunk(self, event: Any) -> AgentChunk | None:
-        """Map a Pydantic AI event to an agnostic AgentChunk."""
+        """Map a pydantic_ai event to an agnostic AgentChunk."""
         match event:
             case PartStartEvent(part=TextPart(content=text)) if text:
                 return AgentChunk(content=text, is_thought=False)
@@ -94,7 +89,7 @@ class AgentSession(AgentSessionProtocol):
         return None
 
     def _map_tool_call(self, event: Any) -> ToolCallInfo | None:
-        """Map a Pydantic AI PartStartEvent to an agnostic ToolCallInfo."""
+        """Map a pydantic_ai PartStartEvent to an agnostic ToolCallInfo."""
         match event:
             case PartStartEvent(
                 part=ToolCallPart(tool_name=name, args=args, tool_call_id=call_id)
@@ -107,7 +102,7 @@ class AgentSession(AgentSessionProtocol):
         return None
 
     def _map_tool_result(self, event: Any) -> ToolCallResultInfo | None:
-        """Map a Pydantic AI FunctionToolResultEvent to an agnostic ToolCallResultInfo."""
+        """Map a pydantic_ai FunctionToolResultEvent to an agnostic ToolCallResultInfo."""
         if not isinstance(event, FunctionToolResultEvent):
             return None
 
@@ -238,9 +233,6 @@ class AgentSession(AgentSessionProtocol):
             else:
                 # Fallback if the stream ends without a result event
                 yield AgentDone(history=self._history)
-                return
 
 
-__all__ = [
-    "AgentSession",
-]
+__all__ = ["AgentSession"]
