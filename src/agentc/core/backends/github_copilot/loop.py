@@ -1,5 +1,6 @@
 import asyncio
-from asyncio import Event
+from asyncio import Event, AbstractEventLoop
+from typing import Optional
 
 from copilot import CopilotSession
 from copilot.generated.session_events import SessionEvent, SessionEventType
@@ -27,7 +28,8 @@ class GhAgentSession(AgentSessionProtocol):
         session: CopilotSession,
     ):
         self._session = session
-        self._event_queue = asyncio.Queue()
+        self._event_queue: asyncio.Queue[SessionEvent] = asyncio.Queue()
+        self._loop: Optional[AbstractEventLoop]
         try:
             self._loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -81,17 +83,17 @@ class GhAgentSession(AgentSessionProtocol):
                     internal_tools = {"report_intent"}
                     if event.data.tool_name not in internal_tools:
                         yield ToolCallInfo(
-                            tool_name=event.data.tool_name,
+                            tool_name=event.data.tool_name or "unknown",
                             args=event.data.arguments,
-                            tool_call_id=event.data.tool_call_id,
+                            tool_call_id=event.data.tool_call_id or "unknown",
                         )
                 case SessionEventType.TOOL_EXECUTION_COMPLETE:
                     yield ToolCallResultInfo(
-                        tool_call_id=event.data.tool_call_id,
+                        tool_call_id=event.data.tool_call_id or "unknown",
                         result=ToolResult(
-                            success=event.data.success,
-                            content=event.data.result,
-                            error=event.data.error,
+                            success=event.data.success if event.data.success is not None else False,
+                            content=str(event.data.result) if event.data.result is not None else "",
+                            error=str(event.data.error) if event.data.error else None,
                         ),
                     )
                 case SessionEventType.SESSION_IDLE:

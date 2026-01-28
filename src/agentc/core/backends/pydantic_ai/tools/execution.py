@@ -19,7 +19,7 @@ async def _run_shell_command(command: str, cwd: str | None = None) -> tuple[str,
     stdout, stderr = await process.communicate()
     output = stdout.decode() if stdout else ""
     error = stderr.decode() if stderr else ""
-    return output + error, process.returncode
+    return output + error, process.returncode if process.returncode is not None else 1
 
 
 async def run_command(ctx: RunContext[RunDeps], command: str, cwd: str | None = None) -> ToolResult:
