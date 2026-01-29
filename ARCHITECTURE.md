@@ -26,20 +26,26 @@ graph TD
 
 ### Layer Responsibilities
 
-**Types Layer** (`types.py`)
-- Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done)
-- `AgentSessionProtocol` interface
+**Types Layer** (`types.py`, `config_types.py`, `command_types.py`)
+- Central `AgentEvent` union (chunks, tool calls, tool results, approvals, done) in `types.py`
+- `AgentSessionProtocol` and `SessionFactoryProtocol` interfaces in `types.py`
+- `BackendConfig` and `ModelConfig` for backend/model presets in `config_types.py`
+- `CommandType`, `CommandResult`, `SessionConfig`, `CommandEffect` in `command_types.py`
 - Shared dataclasses for cross-layer communication
-- `CommandEffect` for effect-based command execution
-- `BackendConfig` and `ModelConfig` for backend/model presets
 
 **Core Layer** (`core/`)
-- `loop.py`: `AgentSession` implementing bidirectional async generator loop
-- `factory.py`: Agent creation with model presets, tools, and skills
 - `commands.py`: Command parsing and effect-based execution
-- `tools/`: Tool implementations (filesystem, editing, execution)
 - `skill_loader.py`: Skill discovery from bundled and project directories
-- `provider_loader.py`: Dynamic provider/model loading from TOML configs
+- `backends/pydantic_ai/`: Pydantic AI backend implementation
+  - `loop.py`: `AgentSession` implementing bidirectional async generator loop
+  - `factory.py`: Agent creation with model presets, tools, and skills
+  - `provider_loader.py`: Dynamic provider/model loading from TOML configs
+  - `session_factory.py`: `PydanticAISessionFactory` implementing `SessionFactoryProtocol`
+  - `tools/`: Tool implementations (filesystem, editing, execution)
+- `backends/github_copilot/`: GitHub Copilot SDK backend implementation
+  - `loop.py`: `GhAgentSession` implementing `AgentSessionProtocol`
+  - `session_factory.py`: `GhCopilotSessionFactory` implementing `SessionFactoryProtocol`
+- `patching/`: Structured file patching engine (anchor-based hunk matching, transactions)
 
 **Middleware Layer** (`middleware/`)
 - `debouncing.py`: Text/thinking delta aggregation (40 char threshold default)
@@ -49,11 +55,12 @@ graph TD
 - `console.py`: Translates `AgentEvent` to console callbacks
 - Owns UI-specific message types and approval handshake coordination
 
-**UI Layer** (`ui/`)
-- `textual_app.py`: Textual TUI application
-- `run_textual.py`: Textual UI entry point
-- `run_console.py`: Console UI demo entry point
+**UI Layer** (`ui/`, `entrypoints/`)
+- `textual_app.py`: Textual TUI application (backend-agnostic)
 - `widgets.py`: Reusable UI components
+- `entrypoints/run_textual.py`: Pydantic AI backend composition root
+- `entrypoints/run_textual_gh.py`: GitHub Copilot SDK backend composition root
+- `entrypoints/run_console.py`: Console UI demo entry point
 
 ## Event Flow
 
@@ -184,7 +191,7 @@ Agent C discovers `providers.toml` files in priority order:
 
 Entries from earlier locations override those with the same name later.
 
-### Provider Loader (`core/provider_loader.py`)
+### Provider Loader (`core/backends/pydantic_ai/provider_loader.py`)
 
 - **`get_default_provider_dirs()`**: Returns discovery paths in priority order
 - **`load_providers(dirs)`**: Discovers and merges backend/model presets with precedence
@@ -198,10 +205,9 @@ provider_cls = "pydantic_ai.providers.ollama.OllamaProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
 base_url = "http://localhost:11434/v1"
 
-[models.local-oss]
+[models.ollama-gpt-oss-120b]
 backend = "ollama"
 model_name = "gpt-oss:120b-cloud"
-params = {temperature = 0.2}
 ```
 
 ## Design Principles

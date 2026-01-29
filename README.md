@@ -1,10 +1,10 @@
 # Agent C
 
-A modern code editing assistant powered by [Pydantic AI](https://ai.pydantic.dev/), featuring an event-driven architecture with skills-based prompting, multiple LLM provider support, and a rich Textual TUI.
+A modern code editing assistant powered by [Pydantic AI](https://ai.pydantic.dev/) or the [GitHub Copilot SDK](https://github.com/github/copilot-sdk), featuring an event-driven architecture with skills-based prompting, multiple LLM provider support, and a rich Textual TUI.
 
 Hugely inspired by [How to Build an Agent](https://ampcode.com/how-to-build-an-agent) by Thorsten Ball of [AmpCode](https://ampcode.com/).
 
-Agent C uses a layered, event-driven architecture - see [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design and diagrams.
+Agent C uses a layered, event-driven architecture with pluggable backends - see [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design and diagrams.
 
 ## Features
 
@@ -24,7 +24,7 @@ Agent C uses a layered, event-driven architecture - see [ARCHITECTURE.md](ARCHIT
 
 ## Quick Start
 
-Agent C defaults to running with Ollama and the `gpt-oss:120b-cloud` model.
+Agent C defaults to running with Ollama and the `ollama-gpt-oss-120b` model preset.
 
 ### 1. Install Ollama (for local inference)
 
@@ -141,6 +141,14 @@ uv run agent-c
 uv run run-console
 ```
 
+### GitHub Copilot SDK Backend
+
+```bash
+uv run run-textual-gh
+```
+
+Requires the Copilot CLI to be installed and available in PATH.
+
 ### Override the Model Preset
 
 Use the `/model` command within the agent:
@@ -148,7 +156,7 @@ Use the `/model` command within the agent:
 /model claude-sonnet
 ```
 
-Available presets (bundled): `local-oss`, `gpt-4o-mini`, `claude-sonnet`, `gemini-flash`, `hf-gpt-oss-120b`, `mistral-large`
+Available presets (bundled): `ollama-gpt-oss-120b`, `ollama-gpt-oss-20b`, `ollama-kimi-k2-5`, `ollama-glm-4-7`, `gpt-4o-mini`, `claude-sonnet`, `gemini3-flash`, `hf-gpt-oss-120b`, `mistral-large`
 
 ### Run Without Installing
 
@@ -201,8 +209,13 @@ The agent uses a smart editing strategy:
 └── src/
     └── agentc/               # Main Implementation
         ├── core/             # Agnostic agent logic
+        │   ├── backends/     # Backend implementations
+        │   │   ├── pydantic_ai/   # Pydantic AI backend (factory, loop, tools)
+        │   │   └── github_copilot/ # GitHub Copilot SDK backend
+        │   └── patching/     # Structured file patching engine
         ├── middleware/       # Cross-cutting concerns (debouncing)
         ├── adapters/         # UI framework bridges
+        ├── entrypoints/      # Application composition roots
         ├── ui/               # User interfaces (Textual, Console)
         └── providers.toml    # Provider configuration
 ```
