@@ -19,7 +19,7 @@
 - **Run Agent C (Textual UI)**: `uv run agent-c`
 - **Run Console UI**: `uv run run-console`
 - **Test all**: `uv run pytest`
-- **Test agentc only**: `uv run pytest tests/core/ tests/middleware/ tests/adapters/`
+- **Test agentc core**: `uv run pytest tests/core/ tests/middleware/ tests/adapters/`
 - **Type check**: `uv run mypy`
 - **Lint**: `uv run ruff check`
 - **Format**: `uv run ruff format`
@@ -43,22 +43,37 @@ The project uses an event-driven, layered architecture with clear separation of 
 
 Event-driven, layered architecture with:
 
-- **`core/`**: Agnostic agentic logic (types, event loop, agent factory, tools). The `tools/` package provides filesystem operations (with combined ignore patterns), file editing with atomic writes and backups, and command execution. `skill_loader.py` discovers `SKILL.md` files from bundled skills (installed to user data directory) and project directories.
-  - `types.py`: Event-stream union (`AgentEvent`), `AgentSessionProtocol`, tool result dataclasses, and re-exports of patching types.
+- **`core/`**: Agnostic agentic logic (types, event loop, commands). Implements shared protocols and types used by all backends.
+  - `types.py`: Event-stream union (`AgentEvent`), `AgentSessionProtocol`, `SessionFactoryProtocol`, tool result dataclasses, and re-exports of patching types.
   - `config_types.py`: `BackendConfig` and `ModelConfig` for provider/model presets.
-  - `command_types.py`: `CommandType`, `CommandResult`, and `CommandEffect` for command parsing/execution.
+  - `command_types.py`: `CommandType`, `CommandResult`, `SessionConfig`, and `CommandEffect` for command parsing/execution.
   - `deps.py`: `RunDeps` context for dependency-injected agent runs.
   - `config.py`: Centralized system constants (output caps, suffixes, default skill dirs, `DEFAULT_MODEL`, `DEFAULT_PROVIDER_DIRS`). Must be UI-agnostic.
-  - `loop.py`: `AgentSession` implementing the bidirectional async generator loop and mapping pydantic_ai events to `AgentEvent`.
-  - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the model preset configured in `providers.toml` (default preset: `local-oss` on the `ollama` backend), plus the shared toolset and skills table.
   - `commands.py`: Command parsing (`CommandParser`) and effect-based execution (`execute_command`).
     - `CommandParser` performs pure parsing without validation
     - Commands produce pure `CommandEffect` data containing `SessionConfig`
     - Session factories validate model names and apply configuration to create new sessions
   - `tool_parsing.py`: Robust JSON/dict argument handling for tool calls.
-  - `tools/`: Tool package organized by category (see Available Tools section)
   - `skill_loader.py`: Discovers `SKILL.md` skills from project directories (`.github/skills`, `.claude/skills`), user directory (`~/.agentc/skills`), and bundled skills (installed to platform-specific user data directory). Earlier directories take precedence.
-  - `provider_loader.py`: Discovers, loads, and merges `providers.toml` files from repo/user/bundled locations (priority: repo > user > bundled). Dynamically imports provider/model classes and builds instances with API keys, base URLs, and model params.
+  - `backends/`: Backend implementations (see Backend Structure below)
+  - `patching/`: Structured file patching engine (see Patching Module below)
+
+- **`core/backends/`**: Backend-specific implementations
+  - **`pydantic_ai/`**: Pydantic AI backend
+    - `factory.py`: `create_agent` factory assembling the `pydantic_ai.Agent` using the model preset configured in `providers.toml` (default preset: `ollama-gpt-oss-120b` on the `ollama` backend), plus the shared toolset and skills table.
+    - `loop.py`: `AgentSession` implementing the bidirectional async generator loop and mapping pydantic_ai events to `AgentEvent`.
+    - `session_factory.py`: `PydanticAISessionFactory` implementing `SessionFactoryProtocol`.
+    - `provider_loader.py`: Discovers, loads, and merges `providers.toml` files from repo/user/bundled locations (priority: repo > user > bundled). Dynamically imports provider/model classes and builds instances with API keys, base URLs, and model params.
+    - `tools/`: Tool package (filesystem, editing, execution) providing filesystem operations with combined ignore patterns, file editing with atomic writes and backups, and command execution.
+  - **`github_copilot/`**: GitHub Copilot SDK backend
+    - `loop.py`: `GhAgentSession` implementing `AgentSessionProtocol` using the Copilot SDK.
+    - `session_factory.py`: `GhCopilotSessionFactory` implementing `SessionFactoryProtocol`.
+
+- **`core/patching/`**: Structured file patching engine
+  - `types.py`: `PatchHunk`, `PatchPlan`, `FilePatch`, and result types.
+  - `engine.py`: Anchor-based hunk matching and application logic.
+  - `transaction.py`: Transactional file modifications with rollback.
+  - `errors.py`: Patching-specific exception types.
 
 - **`middleware/`**: Cross-cutting concerns (e.g., debouncing)
   - `debouncing.py`: `DebouncingMiddleware` for text/thinking delta aggregation (default threshold: 40 characters, configurable).
@@ -73,11 +88,11 @@ Event-driven, layered architecture with:
   - `textual_app.py`: The main Textual `App` implementation.
     - Receives model names list via dependency injection from composition root
     - Each backend's entry point discovers models using backend-specific mechanisms
-    - UI layer remains completely backend-agnostic
+    - UI layer remains completely backend-agnostic, depends on `SessionFactoryProtocol`
   - `widgets.py`: Reusable UI components (status bar, approval forms, etc.).
 
 - **`entrypoints/`**: Application composition roots (dependency injection and bootstrapping)
-  - `run_textual.py`: Pydantic AI backend launcher (entry point: `agent-c`, `run-textual`)
+  - `run_textual.py`: Pydantic AI backend launcher (entry points: `agent-c`, `run-textual`)
   - `run_textual_gh.py`: GitHub Copilot SDK backend launcher (entry point: `run-textual-gh`)
   - `run_console.py`: Console UI demo launcher (entry point: `run-console`)
 
@@ -118,7 +133,7 @@ Entry points inject concrete factories into the UI layer, which uses the Protoco
 
 ## Available Tools
 
-Agent C provides the following tools in the `core/tools/` package:
+Agent C provides the following tools in the `core/backends/pydantic_ai/tools/` package:
 
 ### Filesystem Tools (`tools/filesystem.py`)
 
@@ -194,18 +209,21 @@ When working on `agentc`, follow these rules strictly:
 
 ### Testing (Mandatory)
 Maintain and update the test suite in `tests/`. Must cover:
-- `core.loop`: approval handshake, history, and tool call yielding
-- `core.factory`: agent creation with model presets
+- `core.backends.pydantic_ai.loop`: approval handshake, history, and tool call yielding
+- `core.backends.pydantic_ai.factory`: agent creation with model presets
+- `core.backends.github_copilot.loop`: GitHub Copilot SDK session integration
 - `core.commands`: command parsing and effect-based execution
 - `core.tool_parsing`: robust JSON argument handling
-- `core.tools`: 
+- `core.backends.pydantic_ai.tools`: 
   - `test_tools_filesystem.py`: list_files, glob_paths, search_files
   - `test_tools_editing.py`: read_file, create_file, edit_file, apply_hunks
   - `test_tools_execution.py`: run_command
   - `test_tool_result.py`: tool result mapping
   - `test_ignore_logic.py`: gitignore support integration
+- `core.patching`: patching engine and transaction tests
 - `core.skill_loader`: skill discovery and skills table rendering
-- `core.provider_loader`: provider/model loading and merging
+- `core.backends.pydantic_ai.provider_loader`: provider/model loading and merging
+- `core.session_factories`: Pydantic AI and GitHub Copilot session factory tests
 - `middleware.debouncing`: flush logic and delta aggregation
 - `adapters.textual`: mapping to `adapters.messages`
 - `adapters.console`: console event mapping and approval flow
@@ -294,7 +312,7 @@ When making changes, include in your response:
 
 - **Build system**: `uv_build`
 - **Entry points**:
-  - `agentc.entrypoints.run_textual:main` (agent-c command - default Textual UI)
-  - `agentc.entrypoints.run_console:main` (run-console command)
-  - `agentc.entrypoints.run_textual:main` (run-textual command)
-  - `agentc.entrypoints.run_textual_gh:main_sync` (run-textual-gh command)
+  - `agent-c`: `agentc.entrypoints.run_textual:main` (default Textual UI with Pydantic AI backend)
+  - `run-textual`: `agentc.entrypoints.run_textual:main` (alias for agent-c)
+  - `run-textual-gh`: `agentc.entrypoints.run_textual_gh:main_sync` (Textual UI with GitHub Copilot SDK backend)
+  - `run-console`: `agentc.entrypoints.run_console:main` (Console UI demo)
