@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 800">
+  <defs>
+    <!-- Gradient definitions for layers -->
+    <linearGradient id="uiGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#eff6ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#dbeafe;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="adapterGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#fefce8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fef9c3;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="coreGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#eef2ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e0e7ff;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="backendGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#fff7ed;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ffedd5;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="externalGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f8fafc;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Arrow markers -->
+    <marker id="arrowDown" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+      <path d="M 0 0 L 6 3 L 0 6 z" fill="#3b82f6" />
+    </marker>
+    <marker id="arrowUp" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+      <path d="M 0 0 L 6 3 L 0 6 z" fill="#10b981" />
+    </marker>
+    <marker id="arrowApproval" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+      <path d="M 0 0 L 6 3 L 0 6 z" fill="#ef4444" />
+    </marker>
+  </defs>
+  
+  <!-- Title -->
+  <text x="500" y="30" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="#1e293b">
+    Agent C — Layered Architecture
+  </text>
+  
+  <!-- Layer 1: UI (Top) -->
+  <rect x="50" y="70" width="900" height="110" fill="url(#uiGradient)" stroke="#3b82f6" stroke-width="2" rx="5"/>
+  <text x="70" y="95" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#1e40af">
+    UI Layer
+  </text>
+  <text x="70" y="115" font-family="Arial, sans-serif" font-size="12" fill="#475569">
+    Initiates requests and consumes event streams
+  </text>
+  
+  <!-- UI implementations -->
+  <rect x="100" y="130" width="180" height="35" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1.5" rx="3"/>
+  <text x="190" y="152" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#1e3a8a">
+    TextualAgentApp
+  </text>
+  
+  <rect x="310" y="130" width="180" height="35" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1.5" rx="3"/>
+  <text x="400" y="152" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#1e3a8a">
+    Console Entry Point
+  </text>
+  
+  <text x="720" y="152" font-family="Arial, sans-serif" font-size="11" font-style="italic" fill="#64748b">
+    Uses adapters to run sessions
+  </text>
+  
+  <!-- Layer 2: Adapter -->
+  <rect x="50" y="200" width="900" height="110" fill="url(#adapterGradient)" stroke="#eab308" stroke-width="2" rx="5"/>
+  <text x="70" y="225" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#854d0e">
+    Adapter Layer
+  </text>
+  <text x="70" y="245" font-family="Arial, sans-serif" font-size="12" fill="#475569">
+    Consumes AgentEvent stream, produces UI-specific messages
+  </text>
+  
+  <!-- Adapter implementations -->
+  <rect x="100" y="260" width="180" height="35" fill="#fef08a" stroke="#eab308" stroke-width="1.5" rx="3"/>
+  <text x="190" y="282" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#713f12">
+    TextualAgentAdapter
+  </text>
+  
+  <rect x="310" y="260" width="180" height="35" fill="#fef08a" stroke="#eab308" stroke-width="1.5" rx="3"/>
+  <text x="400" y="282" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#713f12">
+    ConsoleAgentAdapter
+  </text>
+  
+  <text x="690" y="282" font-family="Arial, sans-serif" font-size="11" font-style="italic" fill="#64748b">
+    Implements: event → message translation
+  </text>
+  
+  <!-- Layer 3: Core (Interface Owner) -->
+  <rect x="50" y="330" width="900" height="130" fill="url(#coreGradient)" stroke="#6366f1" stroke-width="3" rx="5"/>
+  <text x="70" y="355" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#4338ca">
+    Core Layer — Interface Definitions
+  </text>
+  <text x="70" y="375" font-family="Arial, sans-serif" font-size="12" fill="#475569">
+    Defines protocols and types; owns the contracts
+  </text>
+  
+  <!-- Core protocols (dashed boxes = interfaces) -->
+  <rect x="100" y="390" width="200" height="55" fill="#c7d2fe" stroke="#6366f1" stroke-width="2" stroke-dasharray="5,3" rx="3"/>
+  <text x="200" y="410" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#312e81">
+    «Protocol»
+  </text>
+  <text x="200" y="425" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#312e81">
+    AgentSessionProtocol
+  </text>
+  <text x="200" y="438" font-family="Arial, sans-serif" font-size="9" text-anchor="middle" fill="#4338ca">
+    run() → AgentEventStream
+  </text>
+  
+  <rect x="330" y="390" width="200" height="55" fill="#c7d2fe" stroke="#6366f1" stroke-width="2" stroke-dasharray="5,3" rx="3"/>
+  <text x="430" y="410" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#312e81">
+    «Type»
+  </text>
+  <text x="430" y="425" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#312e81">
+    AgentEventStream
+  </text>
+  <text x="430" y="438" font-family="Arial, sans-serif" font-size="9" text-anchor="middle" fill="#4338ca">
+    AsyncGenerator[AgentEvent, ...]
+  </text>
+  
+  <rect x="560" y="390" width="200" height="55" fill="#c7d2fe" stroke="#6366f1" stroke-width="2" stroke-dasharray="5,3" rx="3"/>
+  <text x="660" y="410" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#312e81">
+    «Union»
+  </text>
+  <text x="660" y="425" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#312e81">
+    AgentEvent
+  </text>
+  <text x="660" y="438" font-family="Arial, sans-serif" font-size="9" text-anchor="middle" fill="#4338ca">
+    Chunk | ToolCall | Approval | ...
+  </text>
+  
+  <!-- Layer 4: Backend -->
+  <rect x="50" y="480" width="900" height="130" fill="url(#backendGradient)" stroke="#f97316" stroke-width="2" rx="5"/>
+  <text x="70" y="505" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#9a3412">
+    Backend Layer — Protocol Implementations
+  </text>
+  <text x="70" y="525" font-family="Arial, sans-serif" font-size="12" fill="#475569">
+    Wraps external APIs into AgentEvent streams
+  </text>
+  
+  <!-- Backend implementations (solid boxes) -->
+  <rect x="100" y="540" width="220" height="55" fill="#fed7aa" stroke="#f97316" stroke-width="2" rx="3"/>
+  <text x="210" y="558" font-family="Arial, sans-serif" font-size="10" font-style="italic" text-anchor="middle" fill="#7c2d12">
+    implements AgentSessionProtocol
+  </text>
+  <text x="210" y="573" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#7c2d12">
+    AgentSession
+  </text>
+  <text x="210" y="586" font-family="Arial, sans-serif" font-size="9" text-anchor="middle" fill="#9a3412">
+    (Pydantic AI Backend)
+  </text>
+  
+  <rect x="350" y="540" width="220" height="55" fill="#fed7aa" stroke="#f97316" stroke-width="2" rx="3"/>
+  <text x="460" y="558" font-family="Arial, sans-serif" font-size="10" font-style="italic" text-anchor="middle" fill="#7c2d12">
+    implements AgentSessionProtocol
+  </text>
+  <text x="460" y="573" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#7c2d12">
+    GhAgentSession
+  </text>
+  <text x="460" y="586" font-family="Arial, sans-serif" font-size="9" text-anchor="middle" fill="#9a3412">
+    (GitHub Copilot SDK Backend)
+  </text>
+  
+  <text x="650" y="572" font-family="Arial, sans-serif" font-size="11" font-style="italic" fill="#64748b">
+    Maps backend events to
+  </text>
+  <text x="650" y="588" font-family="Arial, sans-serif" font-size="11" font-style="italic" fill="#64748b">
+    AgentEvent union
+  </text>
+  
+  <!-- Layer 5: External -->
+  <rect x="50" y="630" width="900" height="110" fill="url(#externalGradient)" stroke="#94a3b8" stroke-width="2" rx="5"/>
+  <text x="70" y="655" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#334155">
+    External Systems
+  </text>
+  <text x="70" y="675" font-family="Arial, sans-serif" font-size="12" fill="#475569">
+    LLM providers, tool runtimes — produce streaming events
+  </text>
+  
+  <!-- External systems -->
+  <rect x="100" y="690" width="180" height="35" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5" rx="3"/>
+  <text x="190" y="712" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#1e293b">
+    OpenAI / Anthropic
+  </text>
+  
+  <rect x="310" y="690" width="180" height="35" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5" rx="3"/>
+  <text x="400" y="712" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#1e293b">
+    Ollama / Local Models
+  </text>
+  
+  <rect x="520" y="690" width="180" height="35" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5" rx="3"/>
+  <text x="610" y="712" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#1e293b">
+    Tool Execution Runtime
+  </text>
+  
+  <!-- Flow arrows -->
+  <!-- Request flow DOWN (left side) -->
+  <line x1="120" y1="180" x2="120" y2="200" stroke="#3b82f6" stroke-width="3" marker-end="url(#arrowDown)"/>
+  <text x="130" y="192" font-family="Arial, sans-serif" font-size="10" fill="#3b82f6">Prompt</text>
+  
+  <line x1="120" y1="310" x2="120" y2="330" stroke="#3b82f6" stroke-width="3" marker-end="url(#arrowDown)"/>
+  
+  <line x1="120" y1="460" x2="120" y2="480" stroke="#3b82f6" stroke-width="3" marker-end="url(#arrowDown)"/>
+  
+  <line x1="120" y1="610" x2="120" y2="630" stroke="#3b82f6" stroke-width="3" marker-end="url(#arrowDown)"/>
+  <text x="130" y="622" font-family="Arial, sans-serif" font-size="10" fill="#3b82f6">Request</text>
+  
+  <!-- Event flow UP (right side) -->
+  <line x1="880" y1="630" x2="880" y2="610" stroke="#10b981" stroke-width="3" marker-end="url(#arrowUp)"/>
+  <text x="790" y="622" font-family="Arial, sans-serif" font-size="10" fill="#10b981">Raw Events</text>
+  
+  <line x1="880" y1="480" x2="880" y2="460" stroke="#10b981" stroke-width="3" marker-end="url(#arrowUp)"/>
+  <text x="745" y="472" font-family="Arial, sans-serif" font-size="10" fill="#10b981">AgentEvent Stream</text>
+  
+  <line x1="880" y1="330" x2="880" y2="310" stroke="#10b981" stroke-width="3" marker-end="url(#arrowUp)"/>
+  
+  <line x1="880" y1="200" x2="880" y2="180" stroke="#10b981" stroke-width="3" marker-end="url(#arrowUp)"/>
+  <text x="760" y="192" font-family="Arial, sans-serif" font-size="10" fill="#10b981">UI Messages</text>
+  
+  <!-- Approval flow DOWN (center) -->
+  <line x1="500" y1="180" x2="500" y2="200" stroke="#ef4444" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrowApproval)"/>
+  <text x="510" y="192" font-family="Arial, sans-serif" font-size="10" fill="#ef4444">Approval</text>
+  
+  <line x1="500" y1="310" x2="500" y2="330" stroke="#ef4444" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrowApproval)"/>
+  <text x="510" y="322" font-family="Arial, sans-serif" font-size="10" fill="#ef4444">(asend)</text>
+  
+  <line x1="500" y1="460" x2="500" y2="480" stroke="#ef4444" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrowApproval)"/>
+  
+  <!-- Legend -->
+  <g transform="translate(50, 760)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1e293b">Legend:</text>
+    
+    <line x1="80" y1="-5" x2="130" y2="-5" stroke="#3b82f6" stroke-width="3" marker-end="url(#arrowDown)"/>
+    <text x="140" y="0" font-family="Arial, sans-serif" font-size="10" fill="#475569">Request flow (DOWN)</text>
+    
+    <line x1="300" y1="-5" x2="350" y2="-5" stroke="#10b981" stroke-width="3" marker-end="url(#arrowUp)"/>
+    <text x="360" y="0" font-family="Arial, sans-serif" font-size="10" fill="#475569">Event flow (UP)</text>
+    
+    <line x1="510" y1="-5" x2="560" y2="-5" stroke="#ef4444" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrowApproval)"/>
+    <text x="570" y="0" font-family="Arial, sans-serif" font-size="10" fill="#475569">Approval flow (DOWN via asend)</text>
+    
+    <rect x="790" y="-12" width="50" height="16" fill="none" stroke="#6366f1" stroke-width="2" stroke-dasharray="5,3" rx="2"/>
+    <text x="850" y="0" font-family="Arial, sans-serif" font-size="10" fill="#475569">Protocol/Interface (owned by Core)</text>
+  </g>
+</svg>
