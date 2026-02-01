@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700" style="background-color: #0d1117;">
+  <style>
+    /* Global Fonts */
+    text { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    
+    /* Layer Bands */
+    .layer-band { stroke: none; }
+    .layer-label { font-size: 18px; font-weight: bold; fill: #333; text-transform: uppercase; letter-spacing: 1px; }
+    .layer-subtitle { font-size: 14px; font-style: italic; fill: #555; }
+    
+    /* Modules/Cards */
+    .module-card { fill: #ffffff; stroke: none; rx: 8; ry: 8; filter: url(#dropShadow); }
+    .module-title { font-size: 15px; font-weight: 700; fill: #1f2937; text-anchor: middle; }
+    .module-separator { stroke: #e5e7eb; stroke-width: 1; }
+    .module-detail { font-size: 12px; fill: #4b5563; font-family: 'Consolas', monospace; text-anchor: middle; }
+    
+    /* Connections */
+    .arrow { stroke: #cbd5e1; stroke-width: 3; fill: none; marker-end: url(#arrowhead); }
+    
+    /* Title */
+    .title { font-size: 28px; font-weight: bold; fill: #e2e8f0; text-anchor: middle; }
+  </style>
+  
+  <defs>
+    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="1" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.2"/>
+      </feComponentTransfer>
+      <feMerge> 
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/> 
+      </feMerge>
+    </filter>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#cbd5e1" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="500" y="50" class="title">Agent C — Codebase Architecture</text>
+
+  <!-- Presentation Layer (Top) -->
+  <rect x="50" y="100" width="900" height="140" class="layer-band" fill="#e0f2fe" rx="5" />
+  <text x="70" y="130" class="layer-label" fill="#0369a1">Presentation Layer</text>
+  <text x="70" y="150" class="layer-subtitle">User Interface &amp; Entrypoints</text>
+  
+  <rect x="250" y="130" width="220" height="90" class="module-card" />
+  <text x="360" y="155" class="module-title">Textual UI</text>
+  <line x1="260" y1="165" x2="460" y2="165" class="module-separator" />
+  <text x="360" y="185" class="module-detail">class AgentApp</text>
+  <text x="360" y="200" class="module-detail">textual_app.py</text>
+
+  <rect x="550" y="130" width="220" height="90" class="module-card" />
+  <text x="660" y="155" class="module-title">Console Entrypoint</text>
+  <line x1="560" y1="165" x2="760" y2="165" class="module-separator" />
+  <text x="660" y="185" class="module-detail">def run_console()</text>
+  <text x="660" y="200" class="module-detail">run_console.py</text>
+
+
+  <!-- Core Layer (Middle) -->
+  <rect x="50" y="260" width="900" height="140" class="layer-band" fill="#fef3c7" rx="5" />
+  <text x="70" y="290" class="layer-label" fill="#92400e">Core Layer</text>
+  <text x="70" y="310" class="layer-subtitle">Domain Protocols &amp; Logic</text>
+
+  <rect x="150" y="290" width="200" height="90" class="module-card" />
+  <text x="250" y="315" class="module-title">Session Protocols</text>
+  <line x1="160" y1="325" x2="340" y2="325" class="module-separator" />
+  <text x="250" y="345" class="module-detail">AgentSessionProtocol</text>
+  <text x="250" y="360" class="module-detail">core/types.py</text>
+
+  <rect x="380" y="290" width="200" height="90" class="module-card" />
+  <text x="480" y="315" class="module-title">Command Logic</text>
+  <line x1="390" y1="325" x2="570" y2="325" class="module-separator" />
+  <text x="480" y="345" class="module-detail">execute_command()</text>
+  <text x="480" y="360" class="module-detail">core/commands.py</text>
+  
+  <rect x="610" y="290" width="200" height="90" class="module-card" />
+  <text x="710" y="315" class="module-title">Skill Management</text>
+  <line x1="620" y1="325" x2="800" y2="325" class="module-separator" />
+  <text x="710" y="345" class="module-detail">class SkillLoader</text>
+  <text x="710" y="360" class="module-detail">core/skill_loader.py</text>
+
+  <!-- Infrastructure Layer (Bottom) -->
+  <rect x="50" y="420" width="900" height="140" class="layer-band" fill="#dcfce7" rx="5" />
+  <text x="70" y="450" class="layer-label" fill="#166534">Infrastructure Layer</text>
+  <text x="70" y="470" class="layer-subtitle">Adapters &amp; Implementations</text>
+
+  <rect x="250" y="450" width="220" height="90" class="module-card" />
+  <text x="360" y="475" class="module-title">Backends</text>
+  <line x1="260" y1="485" x2="460" y2="485" class="module-separator" />
+  <text x="360" y="505" class="module-detail">pydantic_ai</text>
+  <text x="360" y="520" class="module-detail">core/backends</text>
+  
+  <rect x="550" y="450" width="220" height="90" class="module-card" />
+  <text x="660" y="475" class="module-title">Adapters</text>
+  <line x1="560" y1="485" x2="760" y2="485" class="module-separator" />
+  <text x="660" y="505" class="module-detail">Middleware &amp; Adapters</text>
+  <text x="660" y="520" class="module-detail">adapters/</text>
+
+  <!-- Connections (Arrows) -->
+  <!-- Presentation -> Core -->
+  <path d="M 360 220 L 360 250 L 250 250 L 250 290" class="arrow" />
+  <path d="M 660 220 L 660 250 L 480 250 L 480 290" class="arrow" />
+
+  <!-- Core -> Infra -->
+  <path d="M 250 380 L 250 410 L 360 410 L 360 450" class="arrow" />
+  <path d="M 710 380 L 710 410 L 660 410 L 660 450" class="arrow" />
+
+</svg>
