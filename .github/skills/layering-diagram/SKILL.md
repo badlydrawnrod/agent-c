@@ -11,19 +11,26 @@ Generates a visual SVG diagram of the codebase's architectural layering.
 ## Instructions for the Agent
 
 1.  **Analyze the Codebase**:
-    *   Explore the project structure (directories and files) to identify Key Architectural Layers. Look for patterns like:
-        *   **Presentation/Interface**: `api`, `web`, `cli`, `entrypoints`, `ui`.
-        *   **Application/Service**: `services`, `usecases`, `workflows`, `orchestration`.
-        *   **Domain/Core**: `core`, `models`, `entities`, `logic`, `domain`.
-        *   **Infrastructure/Data**: `db`, `repositories`, `adapters`, `external`, `backends`.
-    *   Note the dependencies between these layers (who imports whom).
+    *   **Deep Dive**: Don't just list files. Look inside them.
+    *   **Identify Responsibilities**: For each layer, determine its primary responsibility (e.g., "Manages User Input", "Business Logic", "Database Access").
+    *   **Key Components**: Inside each module, identify the *most important* Classes, Functions, or Interfaces.
+        *   Look for `class` definitions, especially those that implement protocols or abstract base classes.
+        *   Look for main entry point functions (e.g., `run()`, `main()`).
 
 2.  **Generate SVG**:
-    *   Create a clean, professional SVG diagram.
-    *   Use **boxes** to represent layers and **arrows** to represent functional dependencies.
-    *   **Group** related modules into standard architectural layers (e.g., "Presentation Layer", "Core Layer", "Infrastructure Layer").
-    *   Use distinct **colors** for different layers to improve readability.
-    *   Ensure the text is legible and the layout is balanced.
+    *   **Aesthetics**: Create a "Premium" and "State of the Art" diagram.
+        *   **Background**: Use a dark, professional background (e.g., `#0d1117` or `#1a1b26`).
+        *   **Font**: Use a clean, sans-serif font (e.g., 'Segoe UI', 'Roboto', 'Helvetica'). Title should be large and centered.
+    *   **Layers (Horizontal Bands)**:
+        *   Draw distinct, full-width horizontal bands for each layer.
+        *   Use soft, pastel or distinct background colors for each layer band to separate them clearly.
+        *   **Add a Subtitle**: Under the layer label, add a small subtitle describing its responsibility (e.g., *Handle HTTP Requests*).
+    *   **Modules (Cards)**:
+        *   Represent key files or modules as "cards".
+        *   **Inside the Card**: List the **Key Classes** or **Functions** found during analysis. Use a separator line or smaller font to list them inside the module box.
+        *   Use a white or light background for modules with a subtle drop shadow.
+    *   **Connections**:
+        *   Use thick, clear arrows to show dependencies.
     *   **IMPORTANT**: You MUST escape special characters in text labels. For example, convert `&` to `&amp;`, `<` to `&lt;`, and `>` to `&gt;`. Failure to do this will break the SVG.
 
 3.  **Save the File**:
