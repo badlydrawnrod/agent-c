@@ -18,6 +18,8 @@ from ..core.types import (
     ApprovalResponse,
     ToolCallInfo,
     ToolCallResultInfo,
+    UserInputRequest,
+    UserInputResponse,
 )
 from ..middleware.debouncing import DebouncingMiddleware
 from .console_messages import (
@@ -30,12 +32,14 @@ from .console_messages import (
     ConsoleThinkingEvent,
     ConsoleToolCallEvent,
     ConsoleToolResultEvent,
+    ConsoleUserInputRequestEvent,
 )
 
 
 # Type aliases for callback functions
 type EventCallback = Callable[[ConsoleEvent], None]
 type ApprovalCallback = Callable[[ConsoleApprovalRequestEvent], Awaitable[ApprovalResponse]]
+type UserInputCallback = Callable[[ConsoleUserInputRequestEvent], Awaitable[UserInputResponse]]
 
 
 class ConsoleAgentAdapter:
@@ -54,6 +58,7 @@ class ConsoleAgentAdapter:
         prompt: str,
         on_event: EventCallback,
         on_approval: ApprovalCallback,
+        on_user_input: UserInputCallback,
         cancellation_event: asyncio.Event | None = None,
         debounce_threshold: int = 40,
     ) -> None:
@@ -65,6 +70,8 @@ class ConsoleAgentAdapter:
             on_event: Callback invoked for each console event (text, thinking, etc.).
             on_approval: Async callback invoked when approval is needed.
                          Must return an `ApprovalResponse`.
+            on_user_input: Async callback invoked when user input is needed.
+                           Must return a `UserInputResponse`.
             cancellation_event: Optional event to signal cancellation.
             debounce_threshold: Threshold for debouncing text deltas.
         """
@@ -72,6 +79,7 @@ class ConsoleAgentAdapter:
         self._prompt = prompt
         self._on_event = on_event
         self._on_approval = on_approval
+        self._on_user_input = on_user_input
         self._cancellation_event = cancellation_event
         self._debounce_threshold = debounce_threshold
 
@@ -94,7 +102,7 @@ class ConsoleAgentAdapter:
         """Run the adapter loop, dispatching events via callbacks."""
         try:
             events = self._get_event_stream()
-            response: ApprovalResponse | None = None
+            response: ApprovalResponse | UserInputResponse | None = None
 
             while True:
                 if self._is_cancelled():
@@ -123,6 +131,9 @@ class ConsoleAgentAdapter:
                         case ApprovalRequest() as request:
                             response = await self._handle_approval_request(request)
 
+                        case UserInputRequest() as request:
+                            response = await self._handle_user_input_request(request)
+
                         case AgentDoneEvent(history=history):
                             self._on_event(ConsoleDoneEvent(history))
                             return
@@ -139,3 +150,10 @@ class ConsoleAgentAdapter:
         """Invoke the approval callback and return the user's decision."""
         console_event = ConsoleApprovalRequestEvent(request.tool_calls)
         return await self._on_approval(console_event)
+
+    async def _handle_user_input_request(
+        self, request: UserInputRequest
+    ) -> UserInputResponse:
+        """Invoke the user input callback and return the user's response."""
+        console_event = ConsoleUserInputRequestEvent(request)
+        return await self._on_user_input(console_event)

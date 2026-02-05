@@ -6,6 +6,8 @@ from agentc.core.types import (
     AgentDone,
     ApprovalRequest,
     ApprovalResponse,
+    UserInputRequest,
+    UserInputResponse,
 )
 from agentc.middleware.debouncing import DebouncingMiddleware, ContentBuffer
 
@@ -73,3 +75,45 @@ async def _test_debouncing_middleware_handshake():
 
 def test_debouncing_middleware_handshake():
     asyncio.run(_test_debouncing_middleware_handshake())
+
+
+async def _test_debouncing_middleware_user_input_handshake():
+    middleware = DebouncingMiddleware(threshold=10)
+
+    async def mock_events() -> AsyncGenerator[
+        AgentChunk | UserInputRequest | AgentDone, UserInputResponse | None
+    ]:
+        yield AgentChunk(content="Thinking...", is_thought=True)
+        resp = yield UserInputRequest(
+            question="Type something",
+            options=[],
+            allow_freeform=True,
+        )
+        assert resp is not None
+        assert resp.response == "ok"
+
+        yield AgentChunk(content="Done.", is_thought=False)
+        yield AgentDone(history=[])
+
+    events = mock_events()
+    processed = middleware.process(events)
+
+    it = aiter(processed)
+
+    event1 = await anext(it)
+    assert isinstance(event1, AgentChunk)
+    assert event1.content == "Thinking..."
+
+    event2 = await anext(it)
+    assert isinstance(event2, UserInputRequest)
+
+    event3 = await it.asend(UserInputResponse(response="ok"))
+    assert isinstance(event3, AgentChunk)
+    assert event3.content == "Done."
+
+    event4 = await anext(it)
+    assert isinstance(event4, AgentDone)
+
+
+def test_debouncing_middleware_user_input_handshake():
+    asyncio.run(_test_debouncing_middleware_user_input_handshake())

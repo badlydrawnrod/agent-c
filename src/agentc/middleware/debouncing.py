@@ -12,6 +12,8 @@ from ..core.types import (
     AgentEventStream,
     ApprovalRequest,
     ApprovalResponse,
+    UserInputRequest,
+    UserInputResponse,
 )
 
 
@@ -58,7 +60,7 @@ class DebouncingMiddleware:
         self,
         events: AgentEventStream,
     ) -> AgentEventStream:
-        response: ApprovalResponse | None = None
+        response: ApprovalResponse | UserInputResponse | None = None
 
         while True:
             try:
@@ -72,7 +74,7 @@ class DebouncingMiddleware:
                     if buffered := buffer.add(event.content):
                         yield AgentChunk(content=buffered, is_thought=event.is_thought)
 
-                elif isinstance(event, ApprovalRequest):
+                elif isinstance(event, (ApprovalRequest, UserInputRequest)):
                     for flushed in self._flush_all():
                         yield flushed
                     response = yield event

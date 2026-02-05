@@ -18,6 +18,8 @@ from ..core.types import (
     ApprovalResponse,
     ToolCallInfo,
     ToolCallResultInfo,
+    UserInputRequest,
+    UserInputResponse,
 )
 from ..middleware.debouncing import DebouncingMiddleware
 from .textual_messages import (
@@ -29,6 +31,7 @@ from .textual_messages import (
     AgentTextMessage,
     AgentToolCallMessage,
     AgentToolResultMessage,
+    AgentUserInputRequestMessage,
 )
 
 
@@ -68,7 +71,7 @@ class TextualAgentAdapter:
         """Run the adapter loop, dispatching events to the Textual app."""
         try:
             events = self._get_event_stream()
-            response: ApprovalResponse | None = None
+            response: ApprovalResponse | UserInputResponse | None = None
 
             while True:
                 if self._is_cancelled():
@@ -95,6 +98,9 @@ class TextualAgentAdapter:
                         case ApprovalRequest() as request:
                             response = await self._handle_approval_request(request)
 
+                        case UserInputRequest() as request:
+                            response = await self._handle_user_input_request(request)
+
                         case AgentDoneEvent(history=history):
                             self._app.post_message(AgentDoneMessage(history))
                             break
@@ -113,3 +119,11 @@ class TextualAgentAdapter:
         self._app.post_message(AgentApprovalRequestMessage(request.tool_calls, future))
         approved, reason = await future
         return ApprovalResponse(approved=approved, reason=reason)
+
+    async def _handle_user_input_request(
+        self, request: UserInputRequest
+    ) -> UserInputResponse:
+        """Post a user input request to the UI and wait for the response."""
+        future: asyncio.Future[UserInputResponse] = asyncio.Future()
+        self._app.post_message(AgentUserInputRequestMessage(request, future))
+        return await future

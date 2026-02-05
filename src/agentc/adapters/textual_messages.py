@@ -10,7 +10,7 @@ from typing import Any
 
 from textual.message import Message
 
-from ..core.types import ToolCallInfo, ToolResult
+from ..core.types import ToolCallInfo, ToolResult, UserInputRequest, UserInputResponse
 
 
 class AgentThinkingMessage(Message):
@@ -60,6 +60,26 @@ class AgentApprovalRequestMessage(Message):
         if self._future.done():
             return
         self._future.set_result((approved, reason))
+
+
+class AgentUserInputRequestMessage(Message):
+    """Agent requires user input to continue."""
+
+    def __init__(
+        self,
+        request: UserInputRequest,
+        future: asyncio.Future[UserInputResponse],
+    ) -> None:
+        super().__init__()
+        self.request = request
+        self._future = future
+
+    def resolve(self, response: str) -> None:
+        if self._future.done():
+            return
+        self._future.set_result(
+            UserInputResponse(response=response, request_id=self.request.request_id)
+        )
 
 
 class AgentDoneMessage(Message):

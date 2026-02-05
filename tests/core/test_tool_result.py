@@ -14,8 +14,9 @@ from agentc.core.backends.pydantic_ai.tools.filesystem import (
 )
 from agentc.core.backends.pydantic_ai.tools.editing import read_file, edit_file
 from agentc.core.backends.pydantic_ai.tools.execution import run_command
+from agentc.core.backends.pydantic_ai.tools.ask_user import ask_user
 from agentc.core.deps import RunDeps
-from agentc.core.types import ToolResult
+from agentc.core.types import ToolResult, UserInputRequest, UserInputResponse
 from pydantic_ai import ModelRetry, RunContext
 
 
@@ -207,6 +208,35 @@ class TestReadFile:
             assert result.success is False
         except ModelRetry:
             pass
+
+
+async def _test_ask_user_tool_returns_response():
+    """Test ask_user tool returns the user's response."""
+
+    class _Handler:
+        async def request_user_input(
+            self, request: UserInputRequest
+        ) -> UserInputResponse:
+            assert request.question == "Pick one"
+            return UserInputResponse(response="alpha")
+
+    ctx = create_mock_context()
+    ctx.deps.user_input_handler = _Handler()
+
+    result = await ask_user(
+        ctx,
+        question="Pick one",
+        options=[{"label": "alpha"}, {"label": "beta"}],
+        allow_freeform=True,
+    )
+
+    assert isinstance(result, ToolResult)
+    assert result.success is True
+    assert result.content == "alpha"
+
+
+def test_ask_user_tool_returns_response():
+    asyncio.run(_test_ask_user_tool_returns_response())
 
 
 class TestEditFile:

@@ -14,6 +14,7 @@ from .provider_loader import load_providers, build_model
 from .tools.filesystem import list_files, glob_paths, search_files
 from .tools.editing import read_file, create_file, edit_file, apply_hunks
 from .tools.execution import run_command
+from .tools.ask_user import ask_user
 
 
 def create_agent(
@@ -56,6 +57,7 @@ def create_agent(
         Tool(glob_paths, takes_ctx=True),
         Tool(search_files, takes_ctx=True),
         Tool(read_file, takes_ctx=True),
+        Tool(ask_user, takes_ctx=True),
         Tool(create_file, takes_ctx=True, requires_approval=True),
         Tool(edit_file, takes_ctx=True, requires_approval=True),
         Tool(apply_hunks, takes_ctx=True, requires_approval=True),

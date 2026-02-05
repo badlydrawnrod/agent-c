@@ -29,6 +29,9 @@ __all__ = [
     "ToolCallInfo",
     "ApprovalRequest",
     "ApprovalResponse",
+    "UserInputOption",
+    "UserInputRequest",
+    "UserInputResponse",
     "ToolResult",
     "ToolCallResultInfo",
     "AgentDone",
@@ -36,6 +39,7 @@ __all__ = [
     "AgentEventStream",
     "AgentSessionProtocol",
     "SessionFactoryProtocol",
+    "UserInputHandler",
     # Re-exported patching types
     "FilePatch",
     "FilePatchResult",
@@ -80,6 +84,33 @@ class ApprovalResponse:
 
 
 @dataclass
+class UserInputOption:
+    """A selectable option presented to the user."""
+
+    label: str
+    description: str | None = None
+
+
+@dataclass
+class UserInputRequest:
+    """Yielded when the agent needs user input mid-turn."""
+
+    question: str
+    options: list[UserInputOption]
+    allow_freeform: bool = False
+    placeholder: str | None = None
+    request_id: str | None = None
+
+
+@dataclass
+class UserInputResponse:
+    """Sent back to the agentic loop with user input."""
+
+    response: str
+    request_id: str | None = None
+
+
+@dataclass
 class ToolResult:
     """A structured result from a tool execution."""
 
@@ -104,10 +135,17 @@ class AgentDone:
 
 
 type AgentEvent = (
-    AgentChunk | ToolCallInfo | ToolCallResultInfo | ApprovalRequest | AgentDone
+    AgentChunk
+    | ToolCallInfo
+    | ToolCallResultInfo
+    | ApprovalRequest
+    | UserInputRequest
+    | AgentDone
 )
 
-type AgentEventStream = AsyncGenerator[AgentEvent, ApprovalResponse | None]
+type AgentEventStream = AsyncGenerator[
+    AgentEvent, ApprovalResponse | UserInputResponse | None
+]
 
 
 class AgentSessionProtocol(Protocol):
@@ -141,5 +179,20 @@ class SessionFactoryProtocol(Protocol):
 
         Raises:
             Backend-specific exceptions (e.g., MissingAPIKeyError).
+        """
+        ...
+
+
+class UserInputHandler(Protocol):
+    """Protocol for requesting user input from the UI layer."""
+
+    async def request_user_input(self, request: UserInputRequest) -> UserInputResponse:
+        """Request user input and await a response.
+
+        Args:
+            request: The user input request details.
+
+        Returns:
+            The user's response.
         """
         ...

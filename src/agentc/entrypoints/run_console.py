@@ -17,12 +17,13 @@ from ..adapters.console_messages import (
     ConsoleThinkingEvent,
     ConsoleToolCallEvent,
     ConsoleToolResultEvent,
+    ConsoleUserInputRequestEvent,
 )
 from ..core.backends.pydantic_ai.factory import create_agent
 from ..core.backends.pydantic_ai.loop import AgentSession
 from ..core.skill_loader import SkillLoader
 from ..core.deps import RunDeps
-from ..core.types import ApprovalResponse
+from ..core.types import ApprovalResponse, UserInputResponse
 
 
 def handle_event(event: ConsoleEvent) -> None:
@@ -80,6 +81,28 @@ async def handle_approval(event: ConsoleApprovalRequestEvent) -> ApprovalRespons
     return ApprovalResponse(approved=True)
 
 
+async def handle_user_input(event: ConsoleUserInputRequestEvent) -> UserInputResponse:
+    """Handle user input requests.
+
+    In a real console app, this would use input() to get a response.
+    For demonstration, we auto-select the first option or return a
+    placeholder response.
+    """
+    print("\n" + "?" * 40)
+    print("USER INPUT REQUESTED:")
+    print(event.request.question)
+    if event.request.options:
+        for index, option in enumerate(event.request.options, start=1):
+            print(f"  {index}. {option.label}")
+        selected = event.request.options[0].label
+        print(f"Auto-selecting: {selected}")
+    else:
+        selected = ""
+        print("Auto-responding with empty input for demo")
+    print("?" * 40 + "\n")
+    return UserInputResponse(response=selected, request_id=event.request.request_id)
+
+
 async def run_console_ui() -> None:
     """Run the console UI using the ConsoleAgentAdapter."""
     from pathlib import Path
@@ -102,6 +125,7 @@ async def run_console_ui() -> None:
         prompt=prompt,
         on_event=handle_event,
         on_approval=handle_approval,
+        on_user_input=handle_user_input,
     )
 
     await adapter.run()

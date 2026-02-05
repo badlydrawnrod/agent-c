@@ -10,12 +10,15 @@ from agentc.core.types import (
     ApprovalRequest,
     ToolCallResultInfo,
     ToolResult,
+    UserInputRequest,
+    UserInputResponse,
 )
 from agentc.adapters.textual_messages import (
     AgentTextMessage,
     AgentDoneMessage,
     AgentApprovalRequestMessage,
     AgentToolResultMessage,
+    AgentUserInputRequestMessage,
 )
 
 
@@ -126,3 +129,40 @@ async def _test_textual_adapter_tool_result():
 
 def test_textual_adapter_tool_result():
     asyncio.run(_test_textual_adapter_tool_result())
+
+
+async def _test_textual_adapter_user_input_request():
+    app = MagicMock(spec=App)
+    session = MagicMock(spec=AgentSessionProtocol)
+
+    async def mock_run(*args, **kwargs):
+        resp = yield UserInputRequest(
+            question="Choose one",
+            options=[],
+            allow_freeform=True,
+        )
+        assert isinstance(resp, UserInputResponse)
+        assert resp.response == "custom"
+        yield AgentDoneEvent(history=["msg1"])
+
+    session.run = mock_run
+
+    adapter = TextualAgentAdapter(app=app, session=session, prompt="test")
+
+    def post_message_side_effect(msg):
+        if isinstance(msg, AgentUserInputRequestMessage):
+            msg.resolve("custom")
+
+    app.post_message.side_effect = post_message_side_effect
+
+    await adapter.run()
+
+    messages = extract_posted_messages(app)
+    user_input_msgs = [
+        msg for msg in messages if isinstance(msg, AgentUserInputRequestMessage)
+    ]
+    assert len(user_input_msgs) == 1
+
+
+def test_textual_adapter_user_input_request():
+    asyncio.run(_test_textual_adapter_user_input_request())
