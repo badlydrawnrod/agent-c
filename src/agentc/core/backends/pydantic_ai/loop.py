@@ -6,7 +6,7 @@ approval handshake.
 """
 
 import asyncio
-from typing import Any
+from typing import Any, Coroutine, Mapping, cast
 
 from pydantic_ai import (
     AgentRunResultEvent,
@@ -139,14 +139,17 @@ class AgentSession(AgentSessionProtocol):
         call_id = event.result.tool_call_id
         content = event.result.content
 
-        match content:
-            case ToolResult() as tr:
-                return ToolCallResultInfo(tool_call_id=call_id, result=tr)
-            case {"success": success, "content": c} as d:
-                return ToolCallResultInfo(
-                    tool_call_id=call_id,
-                    result=ToolResult(success=success, content=c, error=d.get("error")),
-                )
+        if isinstance(content, ToolResult):
+            return ToolCallResultInfo(tool_call_id=call_id, result=content)
+
+        if isinstance(content, Mapping):
+            success = bool(content.get("success", False))
+            c = content.get("content", "")
+            error = content.get("error")
+            return ToolCallResultInfo(
+                tool_call_id=call_id,
+                result=ToolResult(success=success, content=str(c), error=str(error) if error is not None else None),
+            )
 
         return None
 
@@ -215,7 +218,7 @@ class AgentSession(AgentSessionProtocol):
                 deferred_tool_results=approval_results,
                 deps=self._deps,
             )
-            agent_iter = aiter(agent_events)
+            agent_iter = agent_events.__aiter__()
             event_task: asyncio.Task[Any] | None = None
             request_task: asyncio.Task[
                 tuple[UserInputRequest, asyncio.Future[UserInputResponse]]
@@ -228,7 +231,9 @@ class AgentSession(AgentSessionProtocol):
                         return
 
                     if event_task is None:
-                        event_task = asyncio.create_task(anext(agent_iter))
+                        event_task = asyncio.create_task(
+                            cast(Coroutine[Any, Any, Any], agent_iter.__anext__())
+                        )
                     if request_task is None:
                         request_task = asyncio.create_task(
                             self._user_input_broker.next_request()
@@ -240,14 +245,14 @@ class AgentSession(AgentSessionProtocol):
                     )
 
                     if request_task in done:
-                        request, future = request_task.result()
+                        input_request, future = request_task.result()
                         request_task = None
-                        response: UserInputResponse | None = yield request
+                        response = cast(UserInputResponse | None, (yield input_request))
                         if response is None:
                             future.set_result(
                                 UserInputResponse(
                                     response="",
-                                    request_id=request.request_id,
+                                    request_id=input_request.request_id,
                                 )
                             )
                             return
@@ -284,9 +289,10 @@ class AgentSession(AgentSessionProtocol):
                             case AgentRunResultEvent(result=result):
                                 if isinstance(result.output, DeferredToolRequests):
                                     # Approval Handshake
-                                    request = self._create_approval_request(event)
-                                    approval_response: ApprovalResponse | None = (
-                                        yield request
+                                    approval_request = self._create_approval_request(event)
+                                    approval_response = cast(
+                                        ApprovalResponse | None,
+                                        (yield approval_request),
                                     )
 
                                     if approval_response is None:

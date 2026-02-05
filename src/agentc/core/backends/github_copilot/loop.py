@@ -1,6 +1,6 @@
 import asyncio
 from asyncio import Event, AbstractEventLoop
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from copilot import CopilotSession
 from copilot.generated.session_events import SessionEvent, SessionEventType
@@ -164,7 +164,7 @@ class GhAgentSession(AgentSessionProtocol):
                 if request_task is not None and request_task in done:
                     our_request, future = request_task.result()
                     request_task = None
-                    response: UserInputResponse | None = yield our_request
+                    response = cast(UserInputResponse | None, (yield our_request))
                     if response is None:
                         future.set_exception(
                             RuntimeError("User cancelled input request")
