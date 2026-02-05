@@ -17,6 +17,7 @@ from textual.widgets import Collapsible, Footer, Markdown, Static, TextArea
 
 from .widgets import (
     ApprovalWidget,
+    AskUserWidget,
     CommandSuggestions,
     HistoryTextArea,
     StatusBar,
@@ -31,6 +32,7 @@ from ..adapters.textual_messages import (
     AgentTextMessage,
     AgentToolCallMessage,
     AgentToolResultMessage,
+    AgentUserInputRequestMessage,
 )
 from ..adapters.textual import TextualAgentAdapter
 from ..core.commands import CommandParser, execute_command
@@ -249,6 +251,20 @@ class TextualAgentApp(App):
             self._status_bar.set_status(f"Awaiting approval for: {tool_names}")
 
         widget = ApprovalWidget(message)
+        if self._scroll:
+            await self._scroll.mount(widget)
+            self._scroll.anchor(anchor=True)
+
+        await self._reset_output()
+
+    @on(AgentUserInputRequestMessage)
+    async def handle_user_input_request(
+        self, message: AgentUserInputRequestMessage
+    ) -> None:
+        if self._status_bar:
+            self._status_bar.set_status("Awaiting user input")
+
+        widget = AskUserWidget(message)
         if self._scroll:
             await self._scroll.mount(widget)
             self._scroll.anchor(anchor=True)

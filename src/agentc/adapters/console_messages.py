@@ -9,7 +9,7 @@ of the Textual `Message` types.
 from dataclasses import dataclass
 from typing import Any
 
-from ..core.types import ToolCallInfo, ToolResult
+from ..core.types import ToolCallInfo, ToolResult, UserInputRequest
 
 
 @dataclass
@@ -51,6 +51,13 @@ class ConsoleApprovalRequestEvent:
 
 
 @dataclass
+class ConsoleUserInputRequestEvent:
+    """Agent requires user input to continue."""
+
+    request: UserInputRequest
+
+
+@dataclass
 class ConsoleDoneEvent:
     """Agent run completed successfully."""
 
@@ -78,6 +85,7 @@ type ConsoleEvent = (
     | ConsoleToolCallEvent
     | ConsoleToolResultEvent
     | ConsoleApprovalRequestEvent
+    | ConsoleUserInputRequestEvent
     | ConsoleDoneEvent
     | ConsoleErrorEvent
     | ConsoleCancelledEvent

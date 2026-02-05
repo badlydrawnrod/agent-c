@@ -16,6 +16,7 @@ from agentc.adapters.console_messages import (
     ConsoleThinkingEvent,
     ConsoleToolCallEvent,
     ConsoleToolResultEvent,
+    ConsoleUserInputRequestEvent,
 )
 from agentc.core.types import (
     AgentChunk,
@@ -26,6 +27,8 @@ from agentc.core.types import (
     ToolCallInfo,
     ToolCallResultInfo,
     ToolResult,
+    UserInputRequest,
+    UserInputResponse,
 )
 
 
@@ -46,11 +49,15 @@ async def _test_console_adapter_run():
     async def on_approval(event):
         return ApprovalResponse(approved=True)
 
+    async def on_user_input(event):
+        return UserInputResponse(response="")
+
     adapter = ConsoleAgentAdapter(
         session=session,
         prompt="test",
         on_event=on_event,
         on_approval=on_approval,
+        on_user_input=on_user_input,
     )
     await adapter.run()
 
@@ -89,11 +96,15 @@ async def _test_console_adapter_thinking():
     async def on_approval(event):
         return ApprovalResponse(approved=True)
 
+    async def on_user_input(event):
+        return UserInputResponse(response="")
+
     adapter = ConsoleAgentAdapter(
         session=session,
         prompt="test",
         on_event=on_event,
         on_approval=on_approval,
+        on_user_input=on_user_input,
     )
     await adapter.run()
 
@@ -131,11 +142,15 @@ async def _test_console_adapter_approval():
         approval_events.append(event)
         return ApprovalResponse(approved=True, reason="Approved by test")
 
+    async def on_user_input(event):
+        return UserInputResponse(response="")
+
     adapter = ConsoleAgentAdapter(
         session=session,
         prompt="test",
         on_event=on_event,
         on_approval=on_approval,
+        on_user_input=on_user_input,
     )
     await adapter.run()
 
@@ -168,11 +183,15 @@ async def _test_console_adapter_tool_call():
     async def on_approval(event):
         return ApprovalResponse(approved=True)
 
+    async def on_user_input(event):
+        return UserInputResponse(response="")
+
     adapter = ConsoleAgentAdapter(
         session=session,
         prompt="test",
         on_event=on_event,
         on_approval=on_approval,
+        on_user_input=on_user_input,
     )
     await adapter.run()
 
@@ -206,11 +225,15 @@ async def _test_console_adapter_tool_result():
     async def on_approval(event):
         return ApprovalResponse(approved=True)
 
+    async def on_user_input(event):
+        return UserInputResponse(response="")
+
     adapter = ConsoleAgentAdapter(
         session=session,
         prompt="test",
         on_event=on_event,
         on_approval=on_approval,
+        on_user_input=on_user_input,
     )
     await adapter.run()
 
@@ -243,11 +266,15 @@ async def _test_console_adapter_error():
     async def on_approval(event):
         return ApprovalResponse(approved=True)
 
+    async def on_user_input(event):
+        return UserInputResponse(response="")
+
     adapter = ConsoleAgentAdapter(
         session=session,
         prompt="test",
         on_event=on_event,
         on_approval=on_approval,
+        on_user_input=on_user_input,
     )
     await adapter.run()
 
@@ -259,3 +286,47 @@ async def _test_console_adapter_error():
 
 def test_console_adapter_error():
     asyncio.run(_test_console_adapter_error())
+
+
+async def _test_console_adapter_user_input_request():
+    """Test that ConsoleAgentAdapter handles user input requests."""
+    session = MagicMock(spec=AgentSessionProtocol)
+    user_input_events: list = []
+
+    async def mock_run(*args, **kwargs):
+        resp = yield UserInputRequest(
+            question="Pick one",
+            options=[],
+            allow_freeform=True,
+        )
+        assert isinstance(resp, UserInputResponse)
+        assert resp.response == "typed"
+        yield AgentDoneEvent(history=[])
+
+    session.run = mock_run
+
+    def on_event(event):
+        pass
+
+    async def on_approval(event):
+        return ApprovalResponse(approved=True)
+
+    async def on_user_input(event):
+        user_input_events.append(event)
+        return UserInputResponse(response="typed")
+
+    adapter = ConsoleAgentAdapter(
+        session=session,
+        prompt="test",
+        on_event=on_event,
+        on_approval=on_approval,
+        on_user_input=on_user_input,
+    )
+    await adapter.run()
+
+    assert len(user_input_events) == 1
+    assert isinstance(user_input_events[0], ConsoleUserInputRequestEvent)
+
+
+def test_console_adapter_user_input_request():
+    asyncio.run(_test_console_adapter_user_input_request())

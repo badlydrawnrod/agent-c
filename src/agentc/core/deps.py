@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover
+    from .types import UserInputHandler
 
 @dataclass
 class RunDeps:
@@ -11,6 +15,7 @@ class RunDeps:
 
     root_dirs: list[Path] = field(default_factory=list)
     skill_dirs: list[Path] = field(default_factory=list)
+    user_input_handler: "UserInputHandler | None" = None
 
     def __post_init__(self) -> None:
         """Consolidate root_dirs and skill_dirs.

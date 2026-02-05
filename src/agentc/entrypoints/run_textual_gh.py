@@ -51,7 +51,7 @@ async def main() -> None:
     try:
         # Discover available models from GitHub Copilot SDK
         model_infos = await client.list_models()
-        model_names = [model["id"] for model in model_infos]  # type: ignore
+        model_names = [model.id for model in model_infos]
 
         # This prompt replaces the system message, but leaves tools and skills intact.
         system_message_config = SystemMessageReplaceConfig(

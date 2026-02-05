@@ -23,6 +23,8 @@ from agentc.core.types import (
     ToolCallInfo,
     ToolCallResultInfo,
     ToolResult,
+    UserInputRequest,
+    UserInputResponse,
 )
 
 
@@ -255,3 +257,42 @@ async def _test_agent_session_run_tool_result():
 
 def test_agent_session_run_tool_result():
     asyncio.run(_test_agent_session_run_tool_result())
+
+
+async def _test_agent_session_run_user_input_handshake():
+    """Test that AgentSession handles user input requests and responses."""
+    agent = MagicMock(spec=NextAgent)
+
+    async def mock_run_stream_events(*args, **kwargs):
+        deps = kwargs.get("deps")
+        assert deps is not None
+        response = await deps.user_input_handler.request_user_input(
+            UserInputRequest(
+                question="Pick a value",
+                options=[],
+                allow_freeform=True,
+            )
+        )
+        yield create_mock_agent_run_result(
+            output=f"Selected {response.response}",
+            history=["msg1", "msg2"],
+        )
+
+    agent.run_stream_events = mock_run_stream_events
+
+    deps = RunDeps(root_dirs=[])
+    session = AgentSession(agent=agent, deps=deps)
+    gen = session.run("Ask user")
+
+    it = aiter(gen)
+
+    request = await anext(it)
+    assert isinstance(request, UserInputRequest)
+
+    completion = await it.asend(UserInputResponse(response="choice"))
+    assert isinstance(completion, AgentDone)
+    assert completion.history == ["msg1", "msg2"]
+
+
+def test_agent_session_run_user_input_handshake():
+    asyncio.run(_test_agent_session_run_user_input_handshake())

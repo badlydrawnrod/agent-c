@@ -6,7 +6,7 @@ approval handshake.
 """
 
 import asyncio
-from typing import Any
+from typing import Any, Coroutine, Mapping, cast
 
 from pydantic_ai import (
     AgentRunResultEvent,
@@ -38,8 +38,33 @@ from ...types import (
     ToolCallInfo,
     ToolCallResultInfo,
     ToolResult,
+    UserInputRequest,
+    UserInputResponse,
+    UserInputHandler,
 )
 from .types import NextAgent
+
+
+class UserInputBroker(UserInputHandler):
+    """Coordinate user input requests between tools and the UI."""
+
+    def __init__(self) -> None:
+        self._queue: asyncio.Queue[
+            tuple[UserInputRequest, asyncio.Future[UserInputResponse]]
+        ] = asyncio.Queue()
+
+    async def request_user_input(self, request: UserInputRequest) -> UserInputResponse:
+        """Enqueue a user input request and wait for the response."""
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[UserInputResponse] = loop.create_future()
+        await self._queue.put((request, future))
+        return await future
+
+    async def next_request(
+        self,
+    ) -> tuple[UserInputRequest, asyncio.Future[UserInputResponse]]:
+        """Wait for the next pending user input request."""
+        return await self._queue.get()
 
 
 class AgentSession(AgentSessionProtocol):
@@ -54,6 +79,8 @@ class AgentSession(AgentSessionProtocol):
         self._agent = agent
         self._history = history or []
         self._deps = deps or RunDeps()
+        self._user_input_broker = UserInputBroker()
+        self._deps.user_input_handler = self._user_input_broker
 
     @property
     def history(self) -> list[Any]:
@@ -112,14 +139,17 @@ class AgentSession(AgentSessionProtocol):
         call_id = event.result.tool_call_id
         content = event.result.content
 
-        match content:
-            case ToolResult() as tr:
-                return ToolCallResultInfo(tool_call_id=call_id, result=tr)
-            case {"success": success, "content": c} as d:
-                return ToolCallResultInfo(
-                    tool_call_id=call_id,
-                    result=ToolResult(success=success, content=c, error=d.get("error")),
-                )
+        if isinstance(content, ToolResult):
+            return ToolCallResultInfo(tool_call_id=call_id, result=content)
+
+        if isinstance(content, Mapping):
+            success = bool(content.get("success", False))
+            c = content.get("content", "")
+            error = content.get("error")
+            return ToolCallResultInfo(
+                tool_call_id=call_id,
+                result=ToolResult(success=success, content=str(c), error=str(error) if error is not None else None),
+            )
 
         return None
 
@@ -182,57 +212,116 @@ class AgentSession(AgentSessionProtocol):
             if self._is_cancelled(cancellation_event):
                 return
 
-            async for event in self._agent.run_stream_events(
+            agent_events = self._agent.run_stream_events(
                 current_prompt,
                 message_history=self._history,
                 deferred_tool_results=approval_results,
                 deps=self._deps,
-            ):
-                if self._is_cancelled(cancellation_event):
-                    return
+            )
+            agent_iter = agent_events.__aiter__()
+            event_task: asyncio.Task[Any] | None = None
+            request_task: asyncio.Task[
+                tuple[UserInputRequest, asyncio.Future[UserInputResponse]]
+            ] | None = None
 
-                # 1. Map content chunks (text/thinking)
-                if chunk := self._map_event_to_chunk(event):
-                    yield chunk
-                    continue
+            should_restart = False
+            try:
+                while True:
+                    if self._is_cancelled(cancellation_event):
+                        return
 
-                # 2. Map tool calls
-                if tool_call := self._map_tool_call(event):
-                    yield tool_call
-                    continue
+                    if event_task is None:
+                        event_task = asyncio.create_task(
+                            cast(Coroutine[Any, Any, Any], agent_iter.__anext__())
+                        )
+                    if request_task is None:
+                        request_task = asyncio.create_task(
+                            self._user_input_broker.next_request()
+                        )
 
-                # 3. Map tool results
-                if tool_result := self._map_tool_result(event):
-                    yield tool_result
-                    continue
+                    done, _ = await asyncio.wait(
+                        {event_task, request_task},
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
 
-                # 4. Handle run results (Done or Approval Handshake)
-                match event:
-                    case AgentRunResultEvent(result=result):
-                        if isinstance(result.output, DeferredToolRequests):
-                            # Approval Handshake
-                            request = self._create_approval_request(event)
-                            approval_response: ApprovalResponse | None = yield request
-
-                            if approval_response is None:
-                                return
-
-                            approval_results = self._create_approval_results(
-                                event, approval_response
+                    if request_task in done:
+                        input_request, future = request_task.result()
+                        request_task = None
+                        response = cast(UserInputResponse | None, (yield input_request))
+                        if response is None:
+                            future.set_result(
+                                UserInputResponse(
+                                    response="",
+                                    request_id=input_request.request_id,
+                                )
                             )
-                            # Sync history and break to start next turn
-                            self.update_history(result.all_messages())
-                            current_prompt = None
+                            return
+                        future.set_result(response)
+                        continue
+
+                    if event_task in done:
+                        try:
+                            event = event_task.result()
+                        except StopAsyncIteration:
                             break
-                        else:
-                            # Final Result
-                            self.update_history(result.all_messages())
-                            yield AgentDone(history=self._history)
+                        event_task = None
+
+                        if self._is_cancelled(cancellation_event):
                             return
 
-            else:
-                # Fallback if the stream ends without a result event
-                yield AgentDone(history=self._history)
+                        # 1. Map content chunks (text/thinking)
+                        if chunk := self._map_event_to_chunk(event):
+                            yield chunk
+                            continue
+
+                        # 2. Map tool calls
+                        if tool_call := self._map_tool_call(event):
+                            yield tool_call
+                            continue
+
+                        # 3. Map tool results
+                        if tool_result := self._map_tool_result(event):
+                            yield tool_result
+                            continue
+
+                        # 4. Handle run results (Done or Approval Handshake)
+                        match event:
+                            case AgentRunResultEvent(result=result):
+                                if isinstance(result.output, DeferredToolRequests):
+                                    # Approval Handshake
+                                    approval_request = self._create_approval_request(event)
+                                    approval_response = cast(
+                                        ApprovalResponse | None,
+                                        (yield approval_request),
+                                    )
+
+                                    if approval_response is None:
+                                        return
+
+                                    approval_results = self._create_approval_results(
+                                        event, approval_response
+                                    )
+                                    # Sync history and break to start next turn
+                                    self.update_history(result.all_messages())
+                                    current_prompt = None
+                                    should_restart = True
+                                    break
+                                else:
+                                    # Final Result
+                                    self.update_history(result.all_messages())
+                                    yield AgentDone(history=self._history)
+                                    return
+            finally:
+                if event_task is not None:
+                    event_task.cancel()
+                if request_task is not None:
+                    request_task.cancel()
+
+            if should_restart:
+                continue
+
+            # Fallback if the stream ends without a result event
+            yield AgentDone(history=self._history)
 
 
 __all__ = ["AgentSession"]

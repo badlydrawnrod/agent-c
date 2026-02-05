@@ -9,17 +9,21 @@ from typing import Any, Literal, TypeAlias, cast
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 from textual.timer import Timer
 from textual.widgets import Button, Static, TextArea
 
-from ..adapters.textual_messages import AgentApprovalRequestMessage
+from ..adapters.textual_messages import (
+    AgentApprovalRequestMessage,
+    AgentUserInputRequestMessage,
+)
 from ..core.commands import COMMAND_METADATA
 
 __all__ = [
     "StatusBar",
     "ApprovalWidget",
+    "AskUserWidget",
     "ToolCallWidget",
     "HistoryTextArea",
     "CommandSuggestions",
@@ -199,6 +203,109 @@ class ApprovalWidget(Static):
         else:
             self.add_class("status-error")
             self.border_title = "Tool Request Denied"
+
+
+class AskUserWidget(Static):
+    """Widget to display and handle user input requests."""
+
+    DEFAULT_CSS = """
+    AskUserWidget {
+        border: solid $accent;
+        background: $boost;
+        height: auto;
+        padding: 0 1;
+    }
+    AskUserWidget.status-submitted {
+        border: solid $success;
+    }
+    .question-text {
+        padding: 0 0 1 0;
+    }
+    .option-container {
+        height: auto;
+        padding: 0 0 1 0;
+        width: 100%;
+    }
+    .option-container Button {
+        width: 100%;
+        min-width: 0;
+    }
+    .option-description {
+        color: $text-muted;
+        padding-left: 1;
+    }
+    .freeform-container {
+        height: auto;
+        padding: 1 0 0 0;
+    }
+    #user-input {
+        height: 3;
+    }
+    """
+
+    def __init__(self, request: AgentUserInputRequestMessage, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._request = request
+        self.border_title = "User Input Requested"
+
+    def on_mount(self) -> None:
+        first_button = self.query(Button).first()
+        if first_button is not None:
+            first_button.focus()
+
+    def compose(self) -> ComposeResult:
+        yield Static(self._request.request.question, classes="question-text")
+
+        for index, option in enumerate(self._request.request.options):
+            with Vertical(classes="option-container"):
+                yield Button(option.label, id=f"option-{index}", variant="primary")
+                if option.description:
+                    yield Static(option.description, classes="option-description")
+
+        if self._request.request.allow_freeform:
+            with Vertical(classes="freeform-container"):
+                yield TextArea(
+                    id="user-input",
+                    placeholder=self._request.request.placeholder
+                    or "Type a response",
+                )
+                yield Button("Submit", id="submit", variant="success", compact=True)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        button_id = event.button.id or ""
+        if button_id.startswith("option-"):
+            try:
+                index = int(button_id.split("-")[-1])
+                option = self._request.request.options[index]
+            except (ValueError, IndexError):
+                return
+            self._finalize(option.label)
+            return
+
+        if button_id == "submit":
+            response = self._get_freeform_response()
+            if response is None:
+                return
+            self._finalize(response)
+
+    def _get_freeform_response(self) -> str | None:
+        if not self._request.request.allow_freeform:
+            return None
+        input_field = self.query_one("#user-input", TextArea)
+        text = input_field.text.strip()
+        if not text:
+            return None
+        return text
+
+    def _finalize(self, response: str) -> None:
+        self._request.resolve(response)
+        for button in self.query(Button):
+            button.disabled = True
+        if self._request.request.allow_freeform:
+            input_field = self.query_one("#user-input", TextArea)
+            input_field.disabled = True
+        self.add_class("status-submitted")
+        self.border_title = "User Input Submitted"
 
 
 class ToolCallWidget(Static):

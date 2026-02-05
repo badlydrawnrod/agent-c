@@ -9,7 +9,7 @@ from copilot.types import SessionConfig as CopilotSessionConfig
 
 from ...command_types import SessionConfig
 from ...types import AgentSessionProtocol
-from .loop import GhAgentSession
+from .loop import GhAgentSession, GhUserInputBroker
 
 
 class GhCopilotSessionFactory:
@@ -57,6 +57,8 @@ class GhCopilotSessionFactory:
             finally:
                 self._current_copilot_session = None
 
+        broker = GhUserInputBroker()
+
         sdk_config = CopilotSessionConfig(
             model=config.model_name or self._base_config["model"],  # type: ignore
             skill_directories=(
@@ -67,10 +69,13 @@ class GhCopilotSessionFactory:
             streaming=self._base_config["streaming"],  # type: ignore
             system_message=self._base_config["system_message"],  # type: ignore
             on_permission_request=self._base_config["on_permission_request"],  # type: ignore
+            on_user_input_request=broker.handle_sdk_request,  # type: ignore
         )
 
         self._current_copilot_session = await self._client.create_session(sdk_config)
-        return GhAgentSession(self._current_copilot_session)
+        return GhAgentSession(
+            self._current_copilot_session, user_input_broker=broker
+        )
 
     async def cleanup(self) -> None:
         """Clean up the current session (called on app shutdown)."""
