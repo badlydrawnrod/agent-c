@@ -284,3 +284,32 @@ async def test_gh_session_factory_cleanup_handles_error() -> None:
     # Cleanup should handle error gracefully and not raise
     await factory.cleanup()
     mock_copilot_session.destroy.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_gh_session_factory_registers_user_input_handler() -> None:
+    """Test that factory registers a user input handler in the SDK config."""
+    mock_client = MagicMock()
+    mock_copilot_session = MagicMock()
+    mock_copilot_session.destroy = AsyncMock()
+    mock_client.create_session = AsyncMock(return_value=mock_copilot_session)
+
+    base_config = {
+        "model": "gpt-4",
+        "skill_directories": ["/default/skills"],
+        "streaming": True,
+        "system_message": "You are a helpful assistant",
+        "on_permission_request": None,
+    }
+
+    factory = GhCopilotSessionFactory(mock_client, base_config)
+    config = SessionConfig(model_name=None, clear_history=True)
+
+    session = await factory.create_session(config)
+    assert isinstance(session, GhAgentSession)
+
+    # Verify on_user_input_request was set in the SDK config
+    call_args = mock_client.create_session.call_args
+    session_config = call_args[0][0]
+    assert "on_user_input_request" in session_config
+    assert callable(session_config["on_user_input_request"])

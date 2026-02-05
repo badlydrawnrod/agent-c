@@ -6,13 +6,15 @@ from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 
-from agentc.core.backends.github_copilot.loop import GhAgentSession
+from agentc.core.backends.github_copilot.loop import GhAgentSession, GhUserInputBroker
 from agentc.core.types import (
     AgentChunk,
     AgentDone,
     ToolCallInfo,
     ToolCallResultInfo,
     ToolResult,
+    UserInputRequest,
+    UserInputResponse,
 )
 
 
@@ -406,3 +408,133 @@ async def _test_gh_agent_session_mixed_events():
 
 def test_gh_agent_session_mixed_events():
     asyncio.run(_test_gh_agent_session_mixed_events())
+
+
+async def _test_gh_agent_session_user_input_handshake():
+    """Test that GhAgentSession handles user input requests via the broker."""
+    mock_copilot_session = MagicMock()
+    mock_copilot_session.send = AsyncMock()
+
+    broker = GhUserInputBroker()
+    session = GhAgentSession(mock_copilot_session, user_input_broker=broker)
+
+    # Queue an initial text chunk so the generator advances.
+    await session._event_queue.put(
+        create_mock_session_event(
+            "ASSISTANT_MESSAGE_DELTA", {"delta_content": "Let me ask..."}
+        )
+    )
+
+    gen = session.run("Ask me something")
+    it = aiter(gen)
+
+    # First yield: text chunk
+    first = await anext(it)
+    assert isinstance(first, AgentChunk)
+    assert first.content == "Let me ask..."
+
+    # Simulate the SDK calling the broker in the background (as it would when
+    # the model invokes the ask_user tool).
+    async def sdk_asks_user():
+        return await broker.handle_sdk_request(
+            {"question": "Pick a colour", "choices": ["red", "blue"], "allowFreeform": False},
+            {"session_id": "test-session"},
+        )
+
+    sdk_task = asyncio.create_task(sdk_asks_user())
+    # Yield control so the broker coroutine enqueues the request.
+    await asyncio.sleep(0)
+
+    # The generator should now yield a UserInputRequest.
+    user_req = await anext(it)
+    assert isinstance(user_req, UserInputRequest)
+    assert user_req.question == "Pick a colour"
+    assert len(user_req.options) == 2
+    assert user_req.options[0].label == "red"
+    assert user_req.options[1].label == "blue"
+    assert user_req.allow_freeform is False
+
+    # Queue a SESSION_IDLE event so the loop can finish after we respond.
+    await session._event_queue.put(
+        create_mock_session_event("SESSION_IDLE", {})
+    )
+
+    # Send the user's response back into the generator.
+    done_event = await gen.asend(UserInputResponse(response="blue"))
+    assert isinstance(done_event, AgentDone)
+
+    # The SDK handler should have received our answer.
+    sdk_result = await sdk_task
+    assert sdk_result["answer"] == "blue"
+    assert sdk_result["wasFreeform"] is True
+
+
+def test_gh_agent_session_user_input_handshake():
+    asyncio.run(_test_gh_agent_session_user_input_handshake())
+
+
+async def _test_gh_agent_session_user_input_cancellation():
+    """Test that cancelling user input stops the generator and fails the SDK future."""
+    mock_copilot_session = MagicMock()
+    mock_copilot_session.send = AsyncMock()
+
+    broker = GhUserInputBroker()
+    session = GhAgentSession(mock_copilot_session, user_input_broker=broker)
+
+    gen = session.run("Ask me something")
+    it = aiter(gen)
+
+    # Simulate the SDK calling the broker.
+    async def sdk_asks_user():
+        return await broker.handle_sdk_request(
+            {"question": "Pick a colour", "choices": [], "allowFreeform": True},
+            {"session_id": "test-session"},
+        )
+
+    sdk_task = asyncio.create_task(sdk_asks_user())
+    await asyncio.sleep(0)
+
+    # The generator should yield a UserInputRequest.
+    user_req = await anext(it)
+    assert isinstance(user_req, UserInputRequest)
+
+    # Send None to cancel (simulates user cancellation).
+    with pytest.raises(StopAsyncIteration):
+        await gen.asend(None)
+
+    # The SDK future should have been rejected.
+    with pytest.raises(RuntimeError, match="User cancelled"):
+        await sdk_task
+
+
+def test_gh_agent_session_user_input_cancellation():
+    asyncio.run(_test_gh_agent_session_user_input_cancellation())
+
+
+async def _test_gh_agent_session_without_broker():
+    """Test that GhAgentSession works normally when no broker is provided."""
+    mock_copilot_session = MagicMock()
+    mock_copilot_session.send = AsyncMock()
+
+    # No broker — should behave exactly like before.
+    session = GhAgentSession(mock_copilot_session)
+
+    await session._event_queue.put(
+        create_mock_session_event("ASSISTANT_MESSAGE_DELTA", {"delta_content": "Hi"})
+    )
+    await session._event_queue.put(
+        create_mock_session_event("SESSION_IDLE", {})
+    )
+
+    results = []
+    async for event in session.run("Hello"):
+        results.append(event)
+
+    assert len(results) == 2
+    assert isinstance(results[0], AgentChunk)
+    assert results[0].content == "Hi"
+    assert isinstance(results[1], AgentDone)
+
+
+def test_gh_agent_session_without_broker():
+    asyncio.run(_test_gh_agent_session_without_broker())
