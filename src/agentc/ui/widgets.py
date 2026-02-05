@@ -224,6 +224,11 @@ class AskUserWidget(Static):
     .option-container {
         height: auto;
         padding: 0 0 1 0;
+        width: 100%;
+    }
+    .option-container Button {
+        width: 100%;
+        min-width: 0;
     }
     .option-description {
         color: $text-muted;
