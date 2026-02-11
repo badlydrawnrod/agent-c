@@ -85,7 +85,59 @@ Feature: Tool Execution
 
 ---
 
-## Feature 3: Approval Handshake
+## Feature 3: Notifications
+
+> Spec references: §2.4, Appendix B
+
+```gherkin
+Feature: Notifications
+  The loop can emit unidirectional status messages that require no response.
+
+  Scenario: Info notification
+    Given a session that emits a progress notification
+    When the backend yields Notification(message="Searching 1,432 files...", severity=INFO)
+    Then the consumer receives a Notification event
+    And the Notification has message = "Searching 1,432 files..."
+    And the Notification has severity = INFO
+    And no response is sent back via asend
+
+  Scenario: Warning notification
+    Given a session that encounters a transient issue
+    When the backend yields Notification(message="Rate limited, retrying in 5s...", severity=WARNING)
+    Then the consumer receives the Notification
+    And the adapter displays it with warning-level styling
+    And the loop continues streaming normally
+
+  Scenario: Error notification
+    Given a session that encounters a non-fatal error
+    When the backend yields Notification(message="Failed to load cache", severity=ERROR)
+    Then the consumer receives the Notification
+    And the loop does not terminate (unlike a propagated exception)
+    And the final event is AgentDone
+
+  Scenario: Notifications interleaved with streaming
+    Given a session
+    When the backend yields AgentChunk, then Notification, then AgentChunk
+    Then all three events are received in order
+    And the Notification does not disrupt the text stream
+    And the final event is AgentDone
+
+  Scenario: Notifications pass through middleware
+    Given the DebouncingMiddleware
+    When the event stream contains a Notification
+    Then the middleware passes it through without buffering
+    And any buffered AgentChunks are not flushed by the Notification
+
+  Scenario: Multiple notifications in one turn
+    Given a session
+    When the backend yields three Notifications with different messages
+    Then all three are received by the consumer in order
+    And each has the correct message and severity
+```
+
+---
+
+## Feature 4: Approval Handshake
 
 > Spec references: §3.2, §5.1, §6
 
@@ -143,7 +195,7 @@ Feature: Approval Handshake
 
 ---
 
-## Feature 4: User Input Flow
+## Feature 5: User Input Flow
 
 > Spec references: §3.3, §5.2, §7, §8
 
@@ -189,7 +241,7 @@ Feature: User Input Flow
 
 ---
 
-## Feature 5: Cancellation
+## Feature 6: Cancellation
 
 > Spec reference: §14
 
@@ -224,7 +276,7 @@ Feature: Cancellation
 
 ---
 
-## Feature 6: Error Handling
+## Feature 7: Error Handling
 
 > Spec reference: §10
 
@@ -260,7 +312,7 @@ Feature: Error Handling
 
 ---
 
-## Feature 7: History Management
+## Feature 8: History Management
 
 > Spec references: §4.1, §15
 
@@ -296,7 +348,7 @@ Feature: History Management
 
 ---
 
-## Feature 8: Interaction Protocol Extensibility
+## Feature 9: Interaction Protocol Extensibility
 
 > Spec references: §3.1, §3.4, §5.3
 
@@ -332,7 +384,7 @@ Feature: Interaction Protocol Extensibility
 
 ---
 
-## Feature 9: Concurrency Guard
+## Feature 10: Concurrency Guard
 
 > Spec reference: §11
 
@@ -356,7 +408,7 @@ Feature: Concurrency Guard
 
 ---
 
-## Feature 10: Backpressure
+## Feature 11: Backpressure
 
 > Spec reference: §12
 

@@ -60,7 +60,27 @@ class ToolResult:
     error: str | None = None
 ```
 
-### 2.4 [AgentDone](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#130-135)
+### 2.4 `Notification`
+A unidirectional status message from the backend. Not LLM content, not a tool result — informational only.
+
+```python
+class Severity(Enum):
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+@dataclass
+class Notification:
+    message: str
+    severity: Severity = Severity.INFO
+```
+
+**When to yield**: Progress updates ("Searching 1,432 files..."), transient errors ("Rate limited, retrying in 5s..."), backend status ("Compacting conversation history..."), or any other information the user should see but that isn't part of the LLM's response.
+
+> [!NOTE]
+> `Notification` is unidirectional — no response is expected. It passes straight through middleware and is displayed by the adapter.
+
+### 2.5 [AgentDone](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#130-135)
 Pure completion signal. The session retains history internally — consumers never need to carry or relay it.
 
 ```python
@@ -131,6 +151,7 @@ class UserInputResponse(InteractionResponse):
 ```python
 type AgentEvent = (
     AgentChunk | ToolCallInfo | ToolCallResultInfo
+    | Notification
     | InteractionRequest  # ← covers all current and future subtypes
     | AgentDone
 )
@@ -169,13 +190,13 @@ class AgentSessionProtocol(Protocol):
 ```
 
 **Contract**:
-- [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217) returns a bidirectional async generator
+- [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161) returns a bidirectional async generator
 - First call is always `asend(None)` or `__anext__()`
 - Yields [AgentDone](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#130-135) as its final event, then terminates
 - On cancellation: `return` immediately, no [AgentDone](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#130-135)
 - Maintains conversation history internally across calls
 - [history](file:///c:/Projects/python/agent-c/src/agentc/core/backends/pydantic_ai/loop.py#85-89) property: available for inspection/serialization but never required by consumers during normal operation
-- **Single-active-run**: only one [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217) may be active at a time per session (see [§11 Concurrency Guard](#11-concurrency-guard))
+- **Single-active-run**: only one [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161) may be active at a time per session (see [§11 Concurrency Guard](#11-concurrency-guard))
 
 ### 4.2 [SessionFactoryProtocol](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#163-184)
 
@@ -346,7 +367,7 @@ class UserInputBroker:
         return await self._queue.get()
 ```
 
-The session wires it up in [__init__](file:///c:/Projects/python/agent-c/src/agentc/adapters/textual.py#41-54):
+The session wires it up in [__init__](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#35-39):
 
 ```python
 self._broker = UserInputBroker()
@@ -392,7 +413,7 @@ if event_task in done:
 
 ## 9. Implementation Pattern
 
-Complete pseudocode for a backend's [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217) method:
+Complete pseudocode for a backend's [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161) method:
 
 ```python
 async def run(self, prompt, cancellation_event=None) -> AgentEventStream:
@@ -498,7 +519,7 @@ Backend error → exception propagates through generator
 
 ## 11. Concurrency Guard
 
-Only one [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217) may be active per session at a time. A second call while the first is still yielding is **undefined behavior**.
+Only one [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161) may be active per session at a time. A second call while the first is still yielding is **undefined behavior**.
 
 The recommended guard:
 
@@ -580,7 +601,7 @@ On cancellation: `return` immediately, no [AgentDone](file:///c:/Projects/python
 
 The session owns its history internally as a backend-specific data structure. It is:
 - Updated on approval round-trips and turn completion
-- Preserved across successive [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217) calls (multi-turn conversation)
+- Preserved across successive [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161) calls (multi-turn conversation)
 - Accessible via the session's [history](file:///c:/Projects/python/agent-c/src/agentc/core/backends/pydantic_ai/loop.py#85-89) property for inspection or serialization
 - **Never carried in events** — [AgentDone](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#130-135) is a pure signal
 
@@ -596,7 +617,7 @@ class RunDeps:
     user_input_handler: UserInputHandler | None  # Broker for mid-turn interactions
 ```
 
-The session must set `deps.user_input_handler` to its broker in [__init__](file:///c:/Projects/python/agent-c/src/agentc/adapters/textual.py#41-54).
+The session must set `deps.user_input_handler` to its broker in [__init__](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#35-39).
 
 ---
 
@@ -669,7 +690,7 @@ elif isinstance(event, InteractionRequest):
 elif isinstance(event, AgentDone):
     flush_all(); yield event
 else:
-    yield event  # ToolCallInfo, ToolCallResultInfo passthrough
+    yield event  # ToolCallInfo, ToolCallResultInfo, Notification passthrough
 ```
 
 ### Adapter (dispatch pattern)
@@ -693,25 +714,25 @@ if isinstance(event, InteractionRequest):
 
 ### `core/backends/<name>/loop.py` — implements [AgentSessionProtocol](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#151-161)
 
-- [ ] [__init__](file:///c:/Projects/python/agent-c/src/agentc/adapters/textual.py#41-54): accept backend client, optional history, [RunDeps](file:///c:/Projects/python/agent-c/src/agentc/core/deps.py#12-42)
-- [ ] [__init__](file:///c:/Projects/python/agent-c/src/agentc/adapters/textual.py#41-54): create [UserInputBroker](file:///c:/Projects/python/agent-c/src/agentc/core/backends/pydantic_ai/loop.py#48-68), set `deps.user_input_handler`
-- [ ] [__init__](file:///c:/Projects/python/agent-c/src/agentc/adapters/textual.py#41-54): set `self._running = False` (concurrency guard)
+- [ ] [__init__](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#35-39): accept backend client, optional history, [RunDeps](file:///c:/Projects/python/agent-c/src/agentc/core/deps.py#12-42)
+- [ ] [__init__](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#35-39): create [UserInputBroker](file:///c:/Projects/python/agent-c/src/agentc/core/backends/pydantic_ai/loop.py#48-68), set `deps.user_input_handler`
+- [ ] [__init__](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#35-39): set `self._running = False` (concurrency guard)
 - [ ] [history](file:///c:/Projects/python/agent-c/src/agentc/core/backends/pydantic_ai/loop.py#85-89) property: expose backend-specific history
-- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217): enforce concurrency guard
-- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217): return `AgentEventStream`
-- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217): map backend events → [AgentChunk](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#54-60), [ToolCallInfo](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#62-69), [ToolCallResultInfo](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#122-128)
-- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217): implement approval (choose strategy from §6)
-- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217): implement concurrent select loop (LLM events + broker)
-- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217): yield [AgentDone()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#130-135) as final event (no args)
-- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217): check `cancellation_event`, clean up tasks in `finally`
-- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217): let LLM/network errors propagate (§10)
-- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217): catch tool errors, yield [ToolCallResultInfo(success=False)](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#122-128) (§10)
+- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161): enforce concurrency guard
+- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161): return `AgentEventStream`
+- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161): map backend events → [AgentChunk](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#54-60), [ToolCallInfo](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#62-69), [ToolCallResultInfo](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#122-128)
+- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161): implement approval (choose strategy from §6)
+- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161): implement concurrent select loop (LLM events + broker)
+- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161): yield [AgentDone()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#130-135) as final event (no args)
+- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161): check `cancellation_event`, clean up tasks in `finally`
+- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161): let LLM/network errors propagate (§10)
+- [ ] [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161): catch tool errors, yield [ToolCallResultInfo(success=False)](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#122-128) (§10)
 - [ ] If callback-based SDK: use thread-safe bridge (§13)
-- [ ] History maintained across [run()](file:///c:/Projects/python/agent-c/src/agentc/core/backends/github_copilot/loop.py#125-217) calls
+- [ ] History maintained across [run()](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#154-161) calls
 
 ### `core/backends/<name>/session_factory.py` — implements [SessionFactoryProtocol](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#163-184)
 
-- [ ] [create_session(config)](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#171-184): build client/model from `config.model_name`
+- [ ] [create_session(config)](file:///c:/Projects/python/agent-c/src/agentc/core/backends/pydantic_ai/session_factory.py#19-47): build client/model from `config.model_name`
 - [ ] Handle `config.clear_history`
 - [ ] Pass `config.deps` to session
 - [ ] Raise on invalid config (missing API keys, unknown models)
@@ -743,12 +764,13 @@ def parse_tool_args(args: Any) -> Mapping[str, Any]:
 ## Appendix B: Event Ordering
 
 ```
-(AgentChunk | ToolCallInfo | ToolCallResultInfo)*   ── streaming
-(InteractionRequest ── InteractionResponse)*        ── zero or more interactions
-AgentDone                                           ── exactly once, terminal
+(AgentChunk | ToolCallInfo | ToolCallResultInfo | Notification)*  ── streaming
+(InteractionRequest ── InteractionResponse)*                      ── zero or more interactions
+AgentDone                                                         ── exactly once, terminal
 ```
 
 - [ToolCallInfo](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#62-69) precedes its matching [ToolCallResultInfo](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#122-128)
+- `Notification` can appear at **any** point during streaming (unidirectional, no response)
 - `InteractionRequest` from the **loop** (approval) appears after LLM completes a response
 - `InteractionRequest` from the **broker** (user input) can appear at any point during streaming
 - [AgentDone](file:///c:/Projects/python/agent-c/src/agentc/core/types.py#130-135) is always last (except on cancellation, where it's omitted)
