@@ -40,6 +40,7 @@ def _load_single_file(path: Path) -> tuple[dict[str, BackendConfig], dict[str, M
             provider_cls_path=config["provider_cls"],
             model_cls_path=config["model_cls"],
             api_key_env=config.get("api_key_env"),
+            base_url_env=config.get("base_url_env"),
             base_url=config.get("base_url"),
         )
 
@@ -56,6 +57,7 @@ def _load_single_file(path: Path) -> tuple[dict[str, BackendConfig], dict[str, M
             backend=config["backend"],
             model_name=config["model_name"],
             api_key_env=config.get("api_key_env"),
+            base_url_env=config.get("base_url_env"),
             base_url=config.get("base_url"),
             params=params,
         )
@@ -135,7 +137,16 @@ def build_model(
     model_cls = get_class(backend_config.model_cls_path)
 
     api_key_env = model_config.api_key_env or backend_config.api_key_env
-    base_url = model_config.base_url or backend_config.base_url
+    base_url_env = model_config.base_url_env or backend_config.base_url_env
+    base_url_from_env: str | None = None
+    if base_url_env:
+        base_url_from_env = os.getenv(base_url_env)
+
+    base_url: str | None
+    if base_url_from_env is not None:
+        base_url = base_url_from_env
+    else:
+        base_url = model_config.base_url or backend_config.base_url
 
     provider_kwargs: dict[str, Any] = {}
     if api_key_env:

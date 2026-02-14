@@ -49,6 +49,7 @@ def test_load_providers_merges_with_priority(tmp_path: Path) -> None:
 provider_cls = "pydantic_ai.providers.ollama.OllamaProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
 base_url = "http://low"
+base_url_env = "LOW_BASE_URL"
 
 [backends.other]
 provider_cls = "OtherProvider"
@@ -72,6 +73,7 @@ model_name = "something"
 provider_cls = "pydantic_ai.providers.ollama.OllamaProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
 base_url = "http://high"
+base_url_env = "HIGH_BASE_URL"
 
 [models.local]
 backend = "ollama"
@@ -84,6 +86,7 @@ params = {temperature = 0.1}
     backends, models = load_providers([high_dir, low_dir])
 
     assert backends["ollama"].base_url == "http://high"
+    assert backends["ollama"].base_url_env == "HIGH_BASE_URL"
     assert models["local"].model_name == "ollama-high"
     assert models["local"].params["temperature"] == 0.1
 
@@ -100,6 +103,7 @@ def test_build_model_prefers_model_overrides(monkeypatch: pytest.MonkeyPatch) ->
         provider_cls_path="provider.Path",
         model_cls_path="model.Path",
         api_key_env="BACKEND_KEY",
+        base_url_env="BACKEND_URL",
         base_url="http://backend",
     )
     model = ModelConfig(
@@ -107,6 +111,7 @@ def test_build_model_prefers_model_overrides(monkeypatch: pytest.MonkeyPatch) ->
         backend="backend",
         model_name="model-str",
         api_key_env="MODEL_KEY",
+        base_url_env="MODEL_URL",
         base_url="http://model",
         params={"temperature": 0.3},
     )
@@ -123,13 +128,14 @@ def test_build_model_prefers_model_overrides(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setenv("MODEL_KEY", "model-secret")
     monkeypatch.setenv("BACKEND_KEY", "backend-secret")
+    monkeypatch.setenv("MODEL_URL", "http://env-model")
 
     with patch("agentc.core.backends.pydantic_ai.provider_loader._get_class", side_effect=get_class_side_effect):
         provider, _ = build_model(model, backend)
 
     mock_provider_cls.assert_called_once_with(
         api_key="model-secret",
-        base_url="http://model",
+        base_url="http://env-model",
     )
     mock_model_cls.assert_called_once()
     kwargs = mock_model_cls.call_args.kwargs

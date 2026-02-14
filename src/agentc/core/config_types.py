@@ -18,6 +18,7 @@ class BackendConfig:
     provider_cls_path: str  # e.g., "pydantic_ai.providers.anthropic.AnthropicProvider"
     model_cls_path: str  # e.g., "pydantic_ai.models.anthropic.AnthropicModel"
     api_key_env: str | None = None
+    base_url_env: str | None = None
     base_url: str | None = None
 
 
@@ -29,6 +30,7 @@ class ModelConfig:
     backend: str
     model_name: str
     api_key_env: str | None = None
+    base_url_env: str | None = None
     base_url: str | None = None
     params: dict[str, Any] = field(default_factory=dict)
 
