@@ -18,6 +18,7 @@
     ```
 - **Run Agent C (Textual UI)**: `uv run agent-c`
 - **Run Console UI**: `uv run run-console`
+- **Run in Docker**: `docker compose up --build`
 - **Test all**: `uv run pytest`
 - **Test agentc core**: `uv run pytest tests/core/ tests/middleware/ tests/adapters/`
 - **Type check**: `uv run mypy`
@@ -29,6 +30,12 @@
 ```powershell
 uv sync
 uv run agent-c  # Launch the Textual UI
+```
+
+## Docker Quickstart
+
+```powershell
+docker compose up --build
 ```
 
 ## Architecture Overview

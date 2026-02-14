@@ -47,6 +47,16 @@ Type commands or questions. Exit with "/quit" or "/exit".
 
 For other providers (OpenAI, Anthropic), see **Configuration** below.
 
+### 4. Run in Docker (optional)
+
+```bash
+docker compose up --build
+```
+
+This runs the Textual UI in the container. The compose file sets `OLLAMA_HOST` to
+`http://host.docker.internal:11434/v1` so the container can reach a host Ollama.
+Override it if your Ollama host runs elsewhere.
+
 ## Installation
 
 ### For Development
@@ -98,6 +108,7 @@ Create `.agentc/providers.toml` in your project or `~/.agentc/providers.toml` in
 [backends.my-custom-ollama]
 provider_cls = "pydantic_ai.providers.ollama.OllamaProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
+base_url_env = "OLLAMA_HOST"
 base_url = "http://localhost:11434/v1"
 
 [backends.openai]
@@ -119,6 +130,7 @@ model_name = "gpt-4o"
 - `model_cls`: Full Python path to the model class
 - `model_name`: Model identifier (e.g., `gpt-4o`, `deepseek-r1:32b`)
 - `api_key_env`: (Optional) Environment variable name for API key
+- `base_url_env`: (Optional) Environment variable name for base URL overrides
 - `base_url`: (Optional) Custom base URL for the backend
 - `params`: (Optional) Keyword arguments forwarded to the model constructor (e.g., `temperature`)
 
