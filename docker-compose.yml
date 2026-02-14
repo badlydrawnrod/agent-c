@@ -12,6 +12,7 @@ services:
       # Pass through API keys
       - ANTHROPIC_API_KEY
       - OPENAI_API_KEY
+      - OLLAMA_HOST=http://host.docker.internal:11434/v1
 
     # Allow accessing the host machine via host.docker.internal on Linux too
     extra_hosts:
