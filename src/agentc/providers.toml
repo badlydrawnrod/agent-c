@@ -22,7 +22,7 @@ api_key_env = "MISTRAL_API_KEY"
 [backends.ollama]
 provider_cls = "pydantic_ai.providers.ollama.OllamaProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
-base_url = "http://localhost:11434/v1"
+base_url = "http://host.docker.internal:11434/v1"
 
 [backends.openai]
 provider_cls = "pydantic_ai.providers.openai.OpenAIProvider"
