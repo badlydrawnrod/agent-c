@@ -1,9 +1,12 @@
 """Tests for GhCopilotSessionFactory."""
 
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, AsyncMock
 
 import pytest
+
+from copilot.types import SessionConfig as CopilotSessionConfig
 
 from agentc.core.backends.github_copilot.loop import GhAgentSession
 from agentc.core.backends.github_copilot.session_factory import GhCopilotSessionFactory
@@ -20,13 +23,13 @@ async def test_gh_session_factory_creates_session() -> None:
     mock_client.create_session = AsyncMock(return_value=mock_copilot_session)
     
     # Create base config
-    base_config = {
+    base_config = cast(CopilotSessionConfig, {
         "model": "gpt-4",
         "skill_directories": ["/default/skills"],
         "streaming": True,
         "system_message": "You are a helpful assistant",
         "on_permission_request": None,
-    }
+    })
     
     factory = GhCopilotSessionFactory(mock_client, base_config)
     config = SessionConfig(
@@ -49,13 +52,13 @@ async def test_gh_session_factory_with_model_override() -> None:
     mock_copilot_session.destroy = AsyncMock()
     mock_client.create_session = AsyncMock(return_value=mock_copilot_session)
     
-    base_config = {
+    base_config = cast(CopilotSessionConfig, {
         "model": "gpt-4",
         "skill_directories": ["/default/skills"],
         "streaming": True,
         "system_message": "You are a helpful assistant",
         "on_permission_request": None,
-    }
+    })
     
     factory = GhCopilotSessionFactory(mock_client, base_config)
     config = SessionConfig(
@@ -81,13 +84,13 @@ async def test_gh_session_factory_with_skill_dirs_override() -> None:
     mock_copilot_session.destroy = AsyncMock()
     mock_client.create_session = AsyncMock(return_value=mock_copilot_session)
     
-    base_config = {
+    base_config = cast(CopilotSessionConfig, {
         "model": "gpt-4",
         "skill_directories": ["/default/skills"],
         "streaming": True,
         "system_message": "You are a helpful assistant",
         "on_permission_request": None,
-    }
+    })
     
     factory = GhCopilotSessionFactory(mock_client, base_config)
     custom_skill_dirs = [Path("/custom/skills"), Path("/another/skills")]
@@ -115,13 +118,13 @@ async def test_gh_session_factory_uses_base_config_defaults() -> None:
     mock_copilot_session.destroy = AsyncMock()
     mock_client.create_session = AsyncMock(return_value=mock_copilot_session)
     
-    base_config = {
+    base_config = cast(CopilotSessionConfig, {
         "model": "gpt-4-turbo",
         "skill_directories": ["/base/skills"],
         "streaming": True,
         "system_message": "Base system message",
         "on_permission_request": MagicMock(),
-    }
+    })
     
     factory = GhCopilotSessionFactory(mock_client, base_config)
     config = SessionConfig(
@@ -157,13 +160,13 @@ async def test_gh_session_factory_destroys_old_session() -> None:
     
     mock_client.create_session = AsyncMock(side_effect=[first_session, second_session])
     
-    base_config = {
+    base_config = cast(CopilotSessionConfig, {
         "model": "gpt-4",
         "skill_directories": [],
         "streaming": True,
         "system_message": "Test",
         "on_permission_request": None,
-    }
+    })
     
     factory = GhCopilotSessionFactory(mock_client, base_config)
     config = SessionConfig(model_name=None, clear_history=True)
@@ -193,13 +196,13 @@ async def test_gh_session_factory_handles_destroy_error() -> None:
     
     mock_client.create_session = AsyncMock(side_effect=[first_session, second_session])
     
-    base_config = {
+    base_config = cast(CopilotSessionConfig, {
         "model": "gpt-4",
         "skill_directories": [],
         "streaming": True,
         "system_message": "Test",
         "on_permission_request": None,
-    }
+    })
     
     factory = GhCopilotSessionFactory(mock_client, base_config)
     config = SessionConfig(model_name=None, clear_history=True)
@@ -221,13 +224,13 @@ async def test_gh_session_factory_cleanup() -> None:
     mock_copilot_session.destroy = AsyncMock()
     mock_client.create_session = AsyncMock(return_value=mock_copilot_session)
     
-    base_config = {
+    base_config = cast(CopilotSessionConfig, {
         "model": "gpt-4",
         "skill_directories": [],
         "streaming": True,
         "system_message": "Test",
         "on_permission_request": None,
-    }
+    })
     
     factory = GhCopilotSessionFactory(mock_client, base_config)
     config = SessionConfig(model_name=None, clear_history=True)
@@ -245,13 +248,13 @@ async def test_gh_session_factory_cleanup_without_session() -> None:
     """Test that cleanup works when no session exists."""
     mock_client = MagicMock()
     
-    base_config = {
+    base_config = cast(CopilotSessionConfig, {
         "model": "gpt-4",
         "skill_directories": [],
         "streaming": True,
         "system_message": "Test",
         "on_permission_request": None,
-    }
+    })
     
     factory = GhCopilotSessionFactory(mock_client, base_config)
     
@@ -267,13 +270,13 @@ async def test_gh_session_factory_cleanup_handles_error() -> None:
     mock_copilot_session.destroy = AsyncMock(side_effect=Exception("Cleanup failed"))
     mock_client.create_session = AsyncMock(return_value=mock_copilot_session)
     
-    base_config = {
+    base_config = cast(CopilotSessionConfig, {
         "model": "gpt-4",
         "skill_directories": [],
         "streaming": True,
         "system_message": "Test",
         "on_permission_request": None,
-    }
+    })
     
     factory = GhCopilotSessionFactory(mock_client, base_config)
     config = SessionConfig(model_name=None, clear_history=True)
@@ -294,13 +297,13 @@ async def test_gh_session_factory_registers_user_input_handler() -> None:
     mock_copilot_session.destroy = AsyncMock()
     mock_client.create_session = AsyncMock(return_value=mock_copilot_session)
 
-    base_config = {
+    base_config = cast(CopilotSessionConfig, {
         "model": "gpt-4",
         "skill_directories": ["/default/skills"],
         "streaming": True,
         "system_message": "You are a helpful assistant",
         "on_permission_request": None,
-    }
+    })
 
     factory = GhCopilotSessionFactory(mock_client, base_config)
     config = SessionConfig(model_name=None, clear_history=True)

@@ -142,6 +142,7 @@ def build_model(
     if base_url_env:
         base_url_from_env = os.getenv(base_url_env)
 
+    base_url: str | None
     if base_url_from_env is not None:
         base_url = base_url_from_env
     else:
