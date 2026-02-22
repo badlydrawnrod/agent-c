@@ -1,0 +1,22 @@
+services:
+  agent-c:
+    build: .
+    image: agent-c:latest
+    container_name: agent-c
+    # Mount the current directory to /workspace so Agent C can edit files here
+    volumes:
+      - .:/workspace
+      # Optional: Persist agent memory/history if strictly needed, though usually it writes to files in workspace
+      # - agent-data:/root/.local/share/agentc 
+    environment:
+      # Pass through API keys
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+      - OLLAMA_HOST=http://host.docker.internal:11434/v1
+
+    # Allow accessing the host machine via host.docker.internal on Linux too
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Enable TTY and stdin for Textual UI
+    stdin_open: true
+    tty: true

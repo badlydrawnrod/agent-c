@@ -203,6 +203,7 @@ Entries from earlier locations override those with the same name later.
 [backends.ollama]
 provider_cls = "pydantic_ai.providers.ollama.OllamaProvider"
 model_cls = "pydantic_ai.models.openai.OpenAIChatModel"
+base_url_env = "OLLAMA_HOST"
 base_url = "http://localhost:11434/v1"
 
 [models.ollama-gpt-oss-120b]
