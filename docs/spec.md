@@ -1,5 +1,9 @@
 # Agent C — Agentic Loop Specification
 
+> [!IMPORTANT]
+> This document is implementation-oriented guidance. The normative inner-core contract is defined in `docs/inner-core-spec.md`.
+> If this document conflicts with `docs/inner-core-spec.md`, the inner-core spec takes precedence.
+
 A backend-agnostic specification for implementing Agent C's core agentic loop. Given this spec, an LLM (or developer) should be able to implement a new backend (e.g., OpenAI Responses API, Google Gemini, AWS Bedrock) that integrates into the existing architecture.
 
 ---
