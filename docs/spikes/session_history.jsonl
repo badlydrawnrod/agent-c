@@ -1,0 +1,5 @@
+{"session_id": "spike-default", "role": "user", "content": "What is the project name?", "event_type": "user_prompt", "metadata": {}}
+{"session_id": "spike-default", "role": "tool", "content": "project_name_tool", "event_type": "tool_call", "metadata": {"tool_call_id": "call_5o8zcahg", "args": {}}}
+{"session_id": "spike-default", "role": "system", "content": "approved", "event_type": "approval_decision", "metadata": {"request_id": "60ab9a14-6d08-401e-bc02-18c6b68143de"}}
+{"session_id": "spike-default", "role": "tool", "content": "agent-c", "event_type": "tool_result", "metadata": {"tool_call_id": "call_5o8zcahg", "success": true, "error": null}}
+{"session_id": "spike-default", "role": "assistant", "content": "The project name is **agent-c**.", "event_type": "assistant_message", "metadata": {}}
