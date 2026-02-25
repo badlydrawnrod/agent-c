@@ -3,21 +3,25 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+from collections.abc import AsyncGenerator, Mapping, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Protocol, TypeAlias
 from urllib.error import URLError
 from urllib.parse import urlsplit
 from urllib.request import urlopen
-from collections.abc import AsyncGenerator, Mapping, Sequence
-from dataclasses import dataclass, field
-from typing import Any, Protocol, TypeAlias
 from uuid import uuid4
 
+from pydantic_core import to_jsonable_python
 from pydantic_ai import (
     Agent,
     AgentRunResultEvent,
     DeferredToolRequests,
     DeferredToolResults,
     FunctionToolResultEvent,
+    ModelMessagesTypeAdapter,
     Tool,
     ToolDenied,
 )
@@ -131,6 +135,7 @@ async def iter_events_with_approval_authority(
 @dataclass(slots=True)
 class SessionConfig:
     model_name: str | None = None
+    initial_history: Sequence[Any] | None = None
 
 
 class AgentSessionProtocol(Protocol):
@@ -158,6 +163,29 @@ class SpikeDeps:
 
 def project_name_tool(ctx: RunContext[SpikeDeps]) -> ToolResult:
     return ToolResult(success=True, content=ctx.deps.project_name)
+
+
+class NativeMessageHistoryStore:
+    """Persist Pydantic AI native message history as JSON on disk."""
+
+    def __init__(self, file_path: Path) -> None:
+        self._file_path = file_path
+        self._file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def save(self, messages: Sequence[Any]) -> None:
+        as_jsonable = to_jsonable_python(messages)
+        self._file_path.write_text(
+            json.dumps(as_jsonable, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def load(self) -> list[Any]:
+        if not self._file_path.exists():
+            return []
+
+        payload = json.loads(self._file_path.read_text(encoding="utf-8"))
+        loaded = ModelMessagesTypeAdapter.validate_python(payload)
+        return list(loaded)
 
 
 def build_pydantic_agent(
@@ -190,11 +218,11 @@ class PydanticAICoreSession(AgentSessionProtocol):
         self,
         agent: Agent[SpikeDeps, str | DeferredToolRequests],
         deps: SpikeDeps,
-        history: list[Any] | None = None,
+        history: Sequence[Any] | None = None,
     ) -> None:
         self._agent = agent
         self._deps = deps
-        self._history = history or []
+        self._history = list(history or [])
         self._run_active = False
 
     @property
@@ -220,10 +248,7 @@ class PydanticAICoreSession(AgentSessionProtocol):
             case PartStartEvent(
                 part=ToolCallPart(tool_name=name, args=args, tool_call_id=call_id)
             ):
-                if isinstance(args, Mapping):
-                    mapped_args: Mapping[str, Any] = args
-                else:
-                    mapped_args = {}
+                mapped_args = args if isinstance(args, Mapping) else {}
                 return ToolCallInfo(
                     tool_name=name,
                     args=mapped_args,
@@ -246,7 +271,8 @@ class PydanticAICoreSession(AgentSessionProtocol):
         return ToolCallResultInfo(tool_call_id=event.result.tool_call_id, result=result)
 
     def _build_approval_request(
-        self, deferred: DeferredToolRequests
+        self,
+        deferred: DeferredToolRequests,
     ) -> ApprovalRequest:
         return ApprovalRequest(
             tool_calls=[
@@ -370,7 +396,11 @@ class PydanticAISpikeFactory(SessionFactoryProtocol):
         model_name = config.model_name or "gpt-oss:20b"
         ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
         agent = build_pydantic_agent(model_name, ollama_base_url)
-        return PydanticAICoreSession(agent=agent, deps=self._deps)
+        return PydanticAICoreSession(
+            agent=agent,
+            deps=self._deps,
+            history=config.initial_history,
+        )
 
 
 def _ollama_health_url(ollama_base_url: str) -> str:
@@ -392,26 +422,56 @@ def ensure_ollama_is_running(ollama_base_url: str) -> None:
         ) from exc
 
 
-async def demo_auto_approval() -> None:
+async def run_and_print(
+    session: AgentSessionProtocol,
+    prompt: str,
+    approval_authority: ApprovalAuthority,
+    label: str,
+) -> None:
+    stream = session.run(prompt)
+    async for event in iter_events_with_approval_authority(stream, approval_authority):
+        print(f"[{label}] {event}")
+
+
+async def demo_native_history_resume() -> None:
     ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
     ensure_ollama_is_running(ollama_base_url)
 
-    factory = PydanticAISpikeFactory(deps=SpikeDeps(project_name="agent-c"))
-    session = await factory.create_session(SessionConfig())
-    stream = session.run("What is the project name?")
-    approval_authority: ApprovalAuthority = AutoApproveAuthority()
+    history_file = Path(
+        os.getenv(
+            "SPIKE_NATIVE_HISTORY_FILE",
+            "docs/spikes/pydantic_native_history.json",
+        )
+    )
+    first_prompt = os.getenv("SPIKE_FIRST_PROMPT", "What is the project name?")
+    second_prompt = os.getenv(
+        "SPIKE_SECOND_PROMPT",
+        "Great. Remind me what project we are discussing.",
+    )
 
-    async for event in iter_events_with_approval_authority(
-        stream,
-        approval_authority,
-    ):
-        print(event)
+    approval_authority: ApprovalAuthority = AutoApproveAuthority()
+    store = NativeMessageHistoryStore(history_file)
+    factory = PydanticAISpikeFactory(deps=SpikeDeps(project_name="agent-c"))
+
+    session_1 = await factory.create_session(SessionConfig())
+    await run_and_print(session_1, first_prompt, approval_authority, label="run1")
+
+    store.save(session_1.history)
+    print(f"[persist] Saved {len(session_1.history)} native messages to {history_file}")
+
+    del session_1
+
+    loaded_history = store.load()
+    print(f"[resume] Loaded {len(loaded_history)} native messages from {history_file}")
+
+    session_2 = await factory.create_session(
+        SessionConfig(initial_history=loaded_history)
+    )
+    await run_and_print(session_2, second_prompt, approval_authority, label="run2")
 
 
 if __name__ == "__main__":
     try:
-        asyncio.run(demo_auto_approval())
+        asyncio.run(demo_native_history_resume())
     except RuntimeError as exc:
         print(f"ERROR: {exc}")
-    except StopAsyncIteration:
-        pass

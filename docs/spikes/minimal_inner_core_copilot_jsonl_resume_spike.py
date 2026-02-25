@@ -74,10 +74,44 @@ class ApprovalResponse(InteractionResponse):
     reason: str | None = None
 
 
+class ApprovalAuthority(Protocol):
+    async def decide(self, request: ApprovalRequest) -> ApprovalResponse:
+        ...
+
+
+class AutoApproveAuthority:
+    async def decide(self, request: ApprovalRequest) -> ApprovalResponse:
+        return ApprovalResponse(request_id=request.request_id, approved=True)
+
+
 AgentEvent: TypeAlias = (
     AgentChunk | ToolCallInfo | ToolCallResultInfo | InteractionRequest | AgentDone
 )
 AgentEventStream: TypeAlias = AsyncGenerator[AgentEvent, InteractionResponse | None]
+
+
+async def iter_events_with_approval_authority(
+    stream: AgentEventStream,
+    approval_authority: ApprovalAuthority,
+) -> AsyncGenerator[AgentEvent, None]:
+    pending_response: InteractionResponse | None = None
+
+    while True:
+        try:
+            if pending_response is None:
+                event = await anext(stream)
+            else:
+                event = await stream.asend(pending_response)
+        except StopAsyncIteration:
+            return
+
+        pending_response = None
+
+        if isinstance(event, ApprovalRequest):
+            pending_response = await approval_authority.decide(event)
+            continue
+
+        yield event
 
 
 @dataclass(slots=True)
@@ -424,21 +458,17 @@ async def demo_resume_auto_approval() -> None:
         )
         session = await factory.create_session(SessionConfig())
         stream = session.run(resume_prompt)
+        approval_authority: ApprovalAuthority = AutoApproveAuthority()
 
         print(
             f"Loaded {len(loaded_history)} history entries from {session_file} for session {session_id}."
         )
 
-        event = await stream.__anext__()
-        while True:
-            if isinstance(event, ApprovalRequest):
-                event = await stream.asend(
-                    ApprovalResponse(request_id=event.request_id, approved=True)
-                )
-                continue
-
+        async for event in iter_events_with_approval_authority(
+            stream,
+            approval_authority,
+        ):
             print(event)
-            event = await stream.__anext__()
     finally:
         await client.stop()
 
