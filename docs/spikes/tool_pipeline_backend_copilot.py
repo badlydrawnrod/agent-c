@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Callable, Mapping
 from typing import Any, cast
 from uuid import uuid4
@@ -33,6 +34,9 @@ from tool_pipeline_common import (
 )
 
 
+DiagnosticLogger = Callable[[str], None]
+
+
 def _to_mapping(value: Any) -> Mapping[str, Any]:
     if isinstance(value, Mapping):
         return value
@@ -40,8 +44,13 @@ def _to_mapping(value: Any) -> Mapping[str, Any]:
 
 
 class HookInteractionBroker:
-    def __init__(self, pipeline: ToolPipeline) -> None:
+    def __init__(
+        self,
+        pipeline: ToolPipeline,
+        diagnostic_logger: DiagnosticLogger | None = None,
+    ) -> None:
         self._pipeline = pipeline
+        self._diagnostic_logger = diagnostic_logger
         self._queue: asyncio.Queue[
             tuple[ToolPipelineInteractionRequest, asyncio.Future[bool]]
         ] = asyncio.Queue()
@@ -53,6 +62,10 @@ class HookInteractionBroker:
             tool_call,
             {"source": "copilot_sdk_hook"},
         )
+        if self._diagnostic_logger is not None:
+            self._diagnostic_logger(
+                f"broker.request_decision tool={tool_call.tool_name} request_id={request.request_id}"
+            )
         await self._queue.put((request, future))
         return await future
 
@@ -63,9 +76,19 @@ class HookInteractionBroker:
 
 
 class CopilotToolHooks:
-    def __init__(self, pipeline: ToolPipeline, interaction_broker: HookInteractionBroker) -> None:
+    def __init__(
+        self,
+        pipeline: ToolPipeline,
+        interaction_broker: HookInteractionBroker,
+        diagnostic_logger: DiagnosticLogger | None = None,
+    ) -> None:
         self._pipeline = pipeline
         self._interaction_broker = interaction_broker
+        self._diagnostic_logger = diagnostic_logger
+        self._enable_post_hook_mutation = os.getenv(
+            "SPIKE_ENABLE_COPILOT_POST_HOOK_MUTATION",
+            "",
+        ).strip().lower() in {"1", "true", "yes", "on"}
 
     async def on_pre_tool_use(
         self,
@@ -83,6 +106,10 @@ class CopilotToolHooks:
         )
 
         decision = await self._pipeline.before_tool_use(tool_call)
+        if self._diagnostic_logger is not None:
+            self._diagnostic_logger(
+                f"hook.pre tool={tool_name} decision={decision.kind} reason={decision.reason}"
+            )
         if decision.kind == "deny":
             return {
                 "permissionDecision": "deny",
@@ -91,6 +118,10 @@ class CopilotToolHooks:
 
         if decision.kind == "ask":
             approved = await self._interaction_broker.request_decision(tool_call)
+            if self._diagnostic_logger is not None:
+                self._diagnostic_logger(
+                    f"hook.pre tool={tool_name} approval_response={approved}"
+                )
             if not approved:
                 return {
                     "permissionDecision": "deny",
@@ -109,6 +140,16 @@ class CopilotToolHooks:
         tool_args = hook_input.get("toolArgs")
         mapped_args = tool_args if isinstance(tool_args, Mapping) else {}
         raw_result = hook_input.get("toolResult")
+        if self._diagnostic_logger is not None:
+            self._diagnostic_logger(
+                f"hook.post tool={tool_name} raw_result={raw_result!r}"
+            )
+        if not self._enable_post_hook_mutation:
+            if self._diagnostic_logger is not None:
+                self._diagnostic_logger(
+                    "hook.post mutation disabled by default; returning None"
+                )
+            return None
         result = ToolResult(success=True, content=str(raw_result), error=None)
 
         tool_call = ToolCallInfo(
@@ -126,10 +167,12 @@ class GhToolPipelineSession(AgentSessionProtocol):
         session: CopilotSession,
         interaction_broker: HookInteractionBroker,
         pipeline: ToolPipeline,
+        diagnostic_logger: DiagnosticLogger | None = None,
     ) -> None:
         self._session = session
         self._interaction_broker = interaction_broker
         self._pipeline = pipeline
+        self._diagnostic_logger = diagnostic_logger
         self._event_queue: asyncio.Queue[SessionEvent] = asyncio.Queue()
         self._history: list[Any] = []
         self._run_active = False
@@ -192,6 +235,10 @@ class GhToolPipelineSession(AgentSessionProtocol):
 
                     response = cast(ToolPipelineInteractionResponse | None, (yield request))
                     if response is None:
+                        if self._diagnostic_logger is not None:
+                            self._diagnostic_logger(
+                                f"session.interaction request_id={request.request_id} response=None"
+                            )
                         future.set_result(False)
                         return
                     if response.request_id != request.request_id:
@@ -204,6 +251,10 @@ class GhToolPipelineSession(AgentSessionProtocol):
                         tool_call,
                         response,
                     )
+                    if self._diagnostic_logger is not None:
+                        self._diagnostic_logger(
+                            f"session.interaction request_id={request.request_id} tool={tool_call.tool_name} resolved={decision.kind}"
+                        )
                     future.set_result(decision.kind == "allow")
                     continue
 
@@ -225,6 +276,10 @@ class GhToolPipelineSession(AgentSessionProtocol):
 
                     if event.type == SessionEventType.TOOL_EXECUTION_START:
                         tool_name = getattr(event.data, "tool_name", None) or "unknown"
+                        if self._diagnostic_logger is not None:
+                            self._diagnostic_logger(
+                                f"event.tool_start tool={tool_name} tool_call_id={getattr(event.data, 'tool_call_id', None)} args={getattr(event.data, 'arguments', None)!r}"
+                            )
                         if tool_name != "report_intent":
                             tool_call = ToolCallInfo(
                                 tool_name=tool_name,
@@ -244,6 +299,10 @@ class GhToolPipelineSession(AgentSessionProtocol):
                         content = str(getattr(event.data, "result", "") or "")
                         error_value = getattr(event.data, "error", None)
                         error_text = str(error_value) if error_value else None
+                        if self._diagnostic_logger is not None:
+                            self._diagnostic_logger(
+                                f"event.tool_complete tool_call_id={tool_call_id} success={success} result={content!r} error={error_text!r}"
+                            )
 
                         tool_call = self._tool_calls_by_id.get(
                             tool_call_id,
@@ -290,14 +349,23 @@ class CopilotToolPipelineFactory(SessionFactoryProtocol):
         client: CopilotClient,
         pipeline: ToolPipeline,
         session_config_builder: CopilotSessionConfigBuilder,
+        diagnostic_logger: DiagnosticLogger | None = None,
     ) -> None:
         self._client = client
         self._pipeline = pipeline
         self._session_config_builder = session_config_builder
+        self._diagnostic_logger = diagnostic_logger
 
     async def create_session(self, config: SessionConfig) -> AgentSessionProtocol:
-        interaction_broker = HookInteractionBroker(self._pipeline)
-        hooks_adapter = CopilotToolHooks(self._pipeline, interaction_broker)
+        interaction_broker = HookInteractionBroker(
+            self._pipeline,
+            diagnostic_logger=self._diagnostic_logger,
+        )
+        hooks_adapter = CopilotToolHooks(
+            self._pipeline,
+            interaction_broker,
+            diagnostic_logger=self._diagnostic_logger,
+        )
         hooks: SessionHooks = {
             "on_pre_tool_use": hooks_adapter.on_pre_tool_use,
             "on_post_tool_use": hooks_adapter.on_post_tool_use,
@@ -308,4 +376,5 @@ class CopilotToolPipelineFactory(SessionFactoryProtocol):
             sdk_session,
             interaction_broker=interaction_broker,
             pipeline=self._pipeline,
+            diagnostic_logger=self._diagnostic_logger,
         )

@@ -292,6 +292,36 @@ class ResultPrefixStage:
         )
 
 
+ToolHandler: TypeAlias = Callable[[Mapping[str, Any], Any], ToolResult]
+
+
+@dataclass(slots=True)
+class RegisteredTool:
+    name: str
+    description: str
+    handler: ToolHandler
+    parameters: Mapping[str, Any] = field(default_factory=dict)
+    requires_approval: bool = True
+
+
+class ToolRegistry:
+    def __init__(self) -> None:
+        self._tools: dict[str, RegisteredTool] = {}
+
+    def register(self, tool: RegisteredTool) -> None:
+        self._tools[tool.name] = tool
+
+    def disable(self, tool_name: str) -> None:
+        self._tools.pop(tool_name, None)
+
+    def resolve(self, tool_name: str) -> RegisteredTool | None:
+        return self._tools.get(tool_name)
+
+    @property
+    def tools(self) -> tuple[RegisteredTool, ...]:
+        return tuple(self._tools.values())
+
+
 @dataclass(slots=True)
 class SessionConfig:
     model_name: str | None = None
