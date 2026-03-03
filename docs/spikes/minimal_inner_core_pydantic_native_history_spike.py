@@ -39,6 +39,14 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai.tools import RunContext
 
+from session_persistence_adapter import (
+    CommonSessionRecord,
+    CommonSessionState,
+    SessionCheckpoint,
+    SessionCheckpointStore,
+    SessionInterchangeCodec,
+)
+
 
 @dataclass(slots=True)
 class AgentChunk:
@@ -165,27 +173,193 @@ def project_name_tool(ctx: RunContext[SpikeDeps]) -> ToolResult:
     return ToolResult(success=True, content=ctx.deps.project_name)
 
 
-class NativeMessageHistoryStore:
-    """Persist Pydantic AI native message history as JSON on disk."""
+class PydanticNativeSessionPersistenceAdapter(
+    SessionCheckpointStore,
+    SessionInterchangeCodec,
+):
+    """Persist Pydantic-native history and expose optional common export/import."""
 
-    def __init__(self, file_path: Path) -> None:
-        self._file_path = file_path
-        self._file_path.parent.mkdir(parents=True, exist_ok=True)
+    def __init__(self, base_file_path: Path, default_session_key: str) -> None:
+        self._base_file_path = base_file_path
+        self._default_session_key = default_session_key
+        self._base_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    def save(self, messages: Sequence[Any]) -> None:
-        as_jsonable = to_jsonable_python(messages)
-        self._file_path.write_text(
-            json.dumps(as_jsonable, ensure_ascii=False, indent=2),
+    def _resolve_session_key(self, session_key: str | None) -> str:
+        return session_key or self._default_session_key
+
+    def _path_for(self, session_key: str, checkpoint_id: str) -> Path:
+        stem = self._base_file_path.stem
+        suffix = self._base_file_path.suffix or ".json"
+        return self._base_file_path.with_name(
+            f"{stem}.{session_key}.{checkpoint_id}{suffix}"
+        )
+
+    def _index_path_for(self, session_key: str) -> Path:
+        stem = self._base_file_path.stem
+        return self._base_file_path.with_name(f"{stem}.{session_key}.checkpoints.json")
+
+    def _load_index(self, session_key: str) -> dict[str, Any]:
+        index_path = self._index_path_for(session_key)
+        if not index_path.exists():
+            return {"active_checkpoint_id": None, "checkpoints": []}
+        return json.loads(index_path.read_text(encoding="utf-8"))
+
+    def _save_index(self, session_key: str, index_data: dict[str, Any]) -> None:
+        index_path = self._index_path_for(session_key)
+        index_path.write_text(
+            json.dumps(index_data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
-    def load(self) -> list[Any]:
-        if not self._file_path.exists():
-            return []
+    def create_checkpoint(
+        self,
+        session_key: str,
+        parent_checkpoint_id: str | None = None,
+        label: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        effective_session_key = self._resolve_session_key(session_key)
+        checkpoint_id = str(uuid4())
+        index_data = self._load_index(effective_session_key)
+        checkpoints = list(index_data.get("checkpoints", []))
+        checkpoints.append(
+            {
+                "checkpoint_id": checkpoint_id,
+                "parent_checkpoint_id": parent_checkpoint_id,
+                "label": label,
+                "metadata": metadata or {},
+            }
+        )
+        index_data["checkpoints"] = checkpoints
+        index_data["active_checkpoint_id"] = checkpoint_id
+        self._save_index(effective_session_key, index_data)
+        return checkpoint_id
 
-        payload = json.loads(self._file_path.read_text(encoding="utf-8"))
+    def set_active_checkpoint(self, session_key: str, checkpoint_id: str | None) -> None:
+        effective_session_key = self._resolve_session_key(session_key)
+        index_data = self._load_index(effective_session_key)
+        index_data["active_checkpoint_id"] = checkpoint_id
+        self._save_index(effective_session_key, index_data)
+
+    def get_active_checkpoint(self, session_key: str) -> str | None:
+        effective_session_key = self._resolve_session_key(session_key)
+        index_data = self._load_index(effective_session_key)
+        return index_data.get("active_checkpoint_id")
+
+    def save_native(
+        self,
+        session_key: str,
+        native_state: list[Any],
+        checkpoint_id: str | None = None,
+    ) -> str:
+        effective_session_key = self._resolve_session_key(session_key)
+        target_checkpoint = checkpoint_id or self.get_active_checkpoint(effective_session_key)
+        if target_checkpoint is None:
+            target_checkpoint = self.create_checkpoint(effective_session_key)
+
+        target = self._path_for(effective_session_key, target_checkpoint)
+        as_jsonable = to_jsonable_python(native_state)
+        target.write_text(
+            json.dumps(as_jsonable, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        self.set_active_checkpoint(effective_session_key, target_checkpoint)
+        return target_checkpoint
+
+    def load_native(
+        self,
+        session_key: str,
+        checkpoint_id: str | None = None,
+    ) -> list[Any] | None:
+        effective_session_key = self._resolve_session_key(session_key)
+        target_checkpoint = checkpoint_id or self.get_active_checkpoint(effective_session_key)
+        if target_checkpoint is None:
+            return None
+
+        target = self._path_for(effective_session_key, target_checkpoint)
+        if not target.exists():
+            return None
+
+        payload = json.loads(target.read_text(encoding="utf-8"))
         loaded = ModelMessagesTypeAdapter.validate_python(payload)
         return list(loaded)
+
+    def build_context(
+        self,
+        session_key: str,
+        checkpoint_id: str | None = None,
+    ) -> list[Any] | None:
+        return self.load_native(session_key=session_key, checkpoint_id=checkpoint_id)
+
+    def export_common(self, session_key: str) -> CommonSessionState:
+        effective_session_key = self._resolve_session_key(session_key)
+        index_data = self._load_index(effective_session_key)
+        active_checkpoint_id = index_data.get("active_checkpoint_id")
+        checkpoints = [
+            SessionCheckpoint(
+                checkpoint_id=item.get("checkpoint_id", ""),
+                parent_checkpoint_id=item.get("parent_checkpoint_id"),
+                label=item.get("label"),
+                metadata=item.get("metadata", {}),
+            )
+            for item in index_data.get("checkpoints", [])
+        ]
+        native_state = self.load_native(
+            effective_session_key,
+            checkpoint_id=active_checkpoint_id,
+        ) or []
+        records = [
+            CommonSessionRecord(
+                role="assistant",
+                content=str(item),
+                kind="native_message",
+                checkpoint_id=active_checkpoint_id,
+                metadata={"native": to_jsonable_python(item)},
+            )
+            for item in native_state
+        ]
+        return CommonSessionState(
+            session_key=effective_session_key,
+            active_checkpoint_id=active_checkpoint_id,
+            checkpoints=checkpoints,
+            records=records,
+        )
+
+    def import_common(
+        self,
+        common_state: CommonSessionState,
+        target_session_key: str | None = None,
+    ) -> str:
+        effective_session_key = self._resolve_session_key(target_session_key)
+        checkpoints_payload = [
+            {
+                "checkpoint_id": checkpoint.checkpoint_id,
+                "parent_checkpoint_id": checkpoint.parent_checkpoint_id,
+                "label": checkpoint.label,
+                "metadata": checkpoint.metadata,
+            }
+            for checkpoint in common_state.checkpoints
+        ]
+        self._save_index(
+            effective_session_key,
+            {
+                "active_checkpoint_id": common_state.active_checkpoint_id,
+                "checkpoints": checkpoints_payload,
+            },
+        )
+        native_state = [
+            record.metadata.get("native", {"role": record.role, "content": record.content})
+            for record in common_state.records
+        ]
+        target_checkpoint = common_state.active_checkpoint_id
+        if target_checkpoint is None:
+            target_checkpoint = self.create_checkpoint(effective_session_key)
+        self.save_native(
+            effective_session_key,
+            native_state,
+            checkpoint_id=target_checkpoint,
+        )
+        return effective_session_key
 
 
 def build_pydantic_agent(
@@ -204,7 +378,7 @@ def build_pydantic_agent(
     return Agent(
         model=model,
         deps_type=SpikeDeps,
-        output_type=str | DeferredToolRequests,
+        output_type=(str, DeferredToolRequests),
         tools=tools,
         system_prompt=(
             "You are a spike backend. Use the project_name_tool to answer questions "
@@ -448,21 +622,29 @@ async def demo_native_history_resume() -> None:
         "SPIKE_SECOND_PROMPT",
         "Great. Remind me what project we are discussing.",
     )
+    session_key = os.getenv("SPIKE_SESSION_KEY", "default")
 
     approval_authority: ApprovalAuthority = AutoApproveAuthority()
-    store = NativeMessageHistoryStore(history_file)
+    persistence: SessionCheckpointStore = PydanticNativeSessionPersistenceAdapter(
+        base_file_path=history_file,
+        default_session_key=session_key,
+    )
     factory = PydanticAISpikeFactory(deps=SpikeDeps(project_name="agent-c"))
 
     session_1 = await factory.create_session(SessionConfig())
     await run_and_print(session_1, first_prompt, approval_authority, label="run1")
 
-    store.save(session_1.history)
-    print(f"[persist] Saved {len(session_1.history)} native messages to {history_file}")
+    persistence.save_native(session_key, list(session_1.history))
+    print(
+        f"[persist] Saved {len(session_1.history)} native messages for session {session_key}"
+    )
 
     del session_1
 
-    loaded_history = store.load()
-    print(f"[resume] Loaded {len(loaded_history)} native messages from {history_file}")
+    loaded_history = persistence.load_native(session_key) or []
+    print(
+        f"[resume] Loaded {len(loaded_history)} native messages for session {session_key}"
+    )
 
     session_2 = await factory.create_session(
         SessionConfig(initial_history=loaded_history)

@@ -176,7 +176,7 @@ def build_pydantic_agent(
     return Agent(
         model=model,
         deps_type=SpikeDeps,
-        output_type=str | DeferredToolRequests,
+        output_type=(str, DeferredToolRequests),
         tools=tools,
         system_prompt=(
             "You are a spike backend. Use the project_name_tool to answer questions "

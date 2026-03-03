@@ -139,7 +139,7 @@ class SessionFactoryProtocol(Protocol):
 
 @dataclass(slots=True)
 class JsonlHistoryEntry:
-    session_id: str
+    session_key: str
     role: str
     content: str
     event_type: str
@@ -150,7 +150,7 @@ class JsonlSessionStore:
     def __init__(self, file_path: Path) -> None:
         self._file_path = file_path
 
-    def load(self, session_id: str) -> list[JsonlHistoryEntry]:
+    def load(self, session_key: str) -> list[JsonlHistoryEntry]:
         if not self._file_path.exists():
             return []
 
@@ -161,11 +161,12 @@ class JsonlSessionStore:
                 if not line:
                     continue
                 row = json.loads(line)
-                if row.get("session_id") != session_id:
+                row_session_key = row.get("session_key") or row.get("session_id")
+                if row_session_key != session_key:
                     continue
                 entries.append(
                     JsonlHistoryEntry(
-                        session_id=row.get("session_id", ""),
+                        session_key=str(row_session_key or ""),
                         role=row.get("role", "unknown"),
                         content=row.get("content", ""),
                         event_type=row.get("event_type", "unknown"),
@@ -436,14 +437,17 @@ async def demo_resume_auto_approval() -> None:
     session_file = Path(
         os.getenv("SPIKE_SESSION_FILE", "docs/spikes/session_history.jsonl")
     )
-    session_id = os.getenv("SPIKE_SESSION_ID", "spike-default")
+    session_key = os.getenv(
+        "SPIKE_SESSION_KEY",
+        os.getenv("SPIKE_SESSION_ID", "spike-default"),
+    )
     prompt = os.getenv(
         "SPIKE_PROMPT",
         "Continue the previous conversation and answer briefly.",
     )
 
     store = JsonlSessionStore(file_path=session_file)
-    loaded_history = store.load(session_id=session_id)
+    loaded_history = store.load(session_key=session_key)
     resume_prompt = build_resume_prompt(loaded_history, prompt)
 
     cli_path = ensure_copilot_cli_available()
@@ -461,7 +465,7 @@ async def demo_resume_auto_approval() -> None:
         approval_authority: ApprovalAuthority = AutoApproveAuthority()
 
         print(
-            f"Loaded {len(loaded_history)} history entries from {session_file} for session {session_id}."
+            f"Loaded {len(loaded_history)} history entries from {session_file} for session {session_key}."
         )
 
         async for event in iter_events_with_approval_authority(

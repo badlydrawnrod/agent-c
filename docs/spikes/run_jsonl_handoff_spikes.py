@@ -24,16 +24,23 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Run spike handoff flows from one command. Supports JSONL cross-backend "
-            "handoff and native Pydantic history resume."
+            "handoff, checkpoint branching demo, and native Pydantic history resume."
         )
     )
     parser.add_argument(
         "--flow",
-        choices=["jsonl-handoff", "pydantic-native-resume"],
+        choices=[
+            "jsonl-handoff",
+            "jsonl-checkpoint-demo",
+            "pydantic-native-resume",
+            "copilot-native-resume",
+        ],
         default="jsonl-handoff",
         help=(
             "Flow to run: 'jsonl-handoff' (Pydantic persist -> Copilot resume) or "
-            "'pydantic-native-resume' (Pydantic persist native history -> Pydantic resume)."
+            "'jsonl-checkpoint-demo' (local checkpoint branching demonstration) or "
+            "'pydantic-native-resume' (Pydantic persist native history -> Pydantic resume), "
+            "or 'copilot-native-resume' (Copilot create with session_id -> Copilot resume_session)."
         ),
     )
     parser.add_argument(
@@ -76,6 +83,21 @@ def main() -> None:
         default="Great. Remind me what project we are discussing.",
         help="Second prompt for pydantic-native-resume flow.",
     )
+    parser.add_argument(
+        "--copilot-session-id",
+        default="spike-copilot-native",
+        help="Session ID for copilot-native-resume flow.",
+    )
+    parser.add_argument(
+        "--copilot-first-prompt",
+        default="What is the project name?",
+        help="First prompt for copilot-native-resume flow.",
+    )
+    parser.add_argument(
+        "--copilot-second-prompt",
+        default="Continue from our prior conversation and summarize what we decided.",
+        help="Second prompt for copilot-native-resume flow.",
+    )
     args = parser.parse_args()
 
     workspace_root = Path(__file__).resolve().parents[2]
@@ -94,6 +116,12 @@ def main() -> None:
         / "spikes"
         / "minimal_inner_core_pydantic_native_history_spike.py"
     )
+    copilot_native_resume_script = (
+        workspace_root
+        / "docs"
+        / "spikes"
+        / "minimal_inner_core_copilot_native_persistence_spike.py"
+    )
 
     env = os.environ.copy()
     print(f"Spike runner flow: {args.flow}")
@@ -101,6 +129,7 @@ def main() -> None:
     if args.flow == "jsonl-handoff":
         env["SPIKE_SESSION_FILE"] = args.session_file
         env["SPIKE_SESSION_ID"] = args.session_id
+        env["SPIKE_SESSION_KEY"] = args.session_id
 
         print("JSONL handoff flow")
         print(f"Session file: {args.session_file}")
@@ -112,7 +141,18 @@ def main() -> None:
 
         env["SPIKE_PROMPT"] = args.resume_prompt
         run_step("Resume with GitHub Copilot SDK", resume_script, env)
-    else:
+    elif args.flow == "jsonl-checkpoint-demo":
+        env["SPIKE_SESSION_FILE"] = args.session_file
+        env["SPIKE_SESSION_ID"] = args.session_id
+        env["SPIKE_SESSION_KEY"] = args.session_id
+        env["SPIKE_DEMO_MODE"] = "checkpoint-branching"
+
+        print("JSONL checkpoint branching demo flow")
+        print(f"Session file: {args.session_file}")
+        print(f"Session id:   {args.session_id}")
+
+        run_step("Run local checkpoint branching demo", persist_script, env)
+    elif args.flow == "pydantic-native-resume":
         env["SPIKE_NATIVE_HISTORY_FILE"] = args.native_history_file
         env["SPIKE_FIRST_PROMPT"] = args.native_first_prompt
         env["SPIKE_SECOND_PROMPT"] = args.native_second_prompt
@@ -123,6 +163,19 @@ def main() -> None:
         run_step(
             "Persist and resume with Pydantic native history",
             native_resume_script,
+            env,
+        )
+    else:
+        env["SPIKE_COPILOT_SESSION_ID"] = args.copilot_session_id
+        env["SPIKE_FIRST_PROMPT"] = args.copilot_first_prompt
+        env["SPIKE_SECOND_PROMPT"] = args.copilot_second_prompt
+
+        print("Copilot native resume flow")
+        print(f"Session id: {args.copilot_session_id}")
+
+        run_step(
+            "Persist and resume with Copilot native session persistence",
+            copilot_native_resume_script,
             env,
         )
 
