@@ -21,16 +21,12 @@ from copilot.types import (
     SessionConfig as CopilotSessionConfig,
     SessionHooks,
     SystemMessageReplaceConfig,
-    Tool as CopilotTool,
-    ToolInvocation,
-    ToolResult as CopilotToolResult,
 )
-from pydantic_ai import Agent, DeferredToolRequests, Tool as PydanticTool
+from pydantic_ai import Agent, DeferredToolRequests
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.ollama import OllamaProvider
-from pydantic_ai.tools import RunContext
-from tool_pipeline_backend_copilot import CopilotToolPipelineFactory
-from tool_pipeline_backend_pydantic import PydanticAIToolPipelineFactory
+from tool_pipeline_backend_copilot import CopilotToolPipelineFactory, build_copilot_tools
+from tool_pipeline_backend_pydantic import PydanticAIToolPipelineFactory, build_pydantic_tools
 from tool_pipeline_common import (
     AutoAllowAndRememberInteractionResponder,
     BlockedToolStage,
@@ -105,65 +101,6 @@ def build_tool_registry() -> ToolRegistry:
         )
     )
     return registry
-
-
-def _to_mapping(value: object) -> Mapping[str, object]:
-    if isinstance(value, Mapping):
-        return value
-    return {}
-
-
-def build_pydantic_tools(registry: ToolRegistry) -> list[PydanticTool[SpikeDeps]]:
-    built_tools: list[PydanticTool[SpikeDeps]] = []
-
-    for tool in registry.tools:
-        def _build_wrapped_tool(registered_tool: RegisteredTool) -> PydanticTool[SpikeDeps]:
-            def _tool(ctx: RunContext[SpikeDeps]) -> ToolResult:
-                return registered_tool.handler({}, ctx.deps)
-
-            _tool.__name__ = registered_tool.name
-            return PydanticTool(
-                _tool,
-                takes_ctx=True,
-                requires_approval=registered_tool.requires_approval,
-            )
-
-        built_tools.append(_build_wrapped_tool(tool))
-
-    return built_tools
-
-
-def build_copilot_tools(
-    registry: ToolRegistry,
-    deps: SpikeDeps,
-) -> list[CopilotTool]:
-    built_tools: list[CopilotTool] = []
-
-    for tool in registry.tools:
-        def _build_handler(registered_tool: RegisteredTool):
-            def _handler(invocation: ToolInvocation) -> CopilotToolResult:
-                arguments = _to_mapping(invocation.get("arguments"))
-                result = registered_tool.handler(arguments, deps)
-                payload: CopilotToolResult = {
-                    "resultType": "success" if result.success else "failure",
-                    "textResultForLlm": result.content,
-                }
-                if result.error:
-                    payload["error"] = result.error
-                return payload
-
-            return _handler
-
-        built_tools.append(
-            CopilotTool(
-                name=tool.name,
-                description=tool.description,
-                handler=_build_handler(tool),
-                parameters=dict(tool.parameters),
-            )
-        )
-
-    return built_tools
 
 
 def build_pydantic_agent(

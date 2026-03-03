@@ -12,6 +12,7 @@ from pydantic_ai import (
     DeferredToolRequests,
     DeferredToolResults,
     FunctionToolResultEvent,
+    Tool as PydanticTool,
     ToolDenied,
 )
 from pydantic_ai.messages import (
@@ -31,6 +32,7 @@ from tool_pipeline_common import (
     AgentSessionProtocol,
     SessionConfig,
     SessionFactoryProtocol,
+    ToolRegistry,
     ToolCallInfo,
     ToolCallResultInfo,
     ToolPipeline,
@@ -38,9 +40,31 @@ from tool_pipeline_common import (
     ToolPipelineInteractionResponse,
     ToolResult,
 )
+from pydantic_ai.tools import RunContext
 
 
 PydanticAgentBuilder = Callable[[SessionConfig], Agent[Any, str | DeferredToolRequests]]
+
+
+def build_pydantic_tools(registry: ToolRegistry) -> list[PydanticTool[Any]]:
+    built_tools: list[PydanticTool[Any]] = []
+
+    for tool in registry.tools:
+
+        def _build_wrapped_tool(registered_tool):
+            def _tool(ctx: RunContext[Any]) -> ToolResult:
+                return registered_tool.handler({}, ctx.deps)
+
+            _tool.__name__ = registered_tool.name
+            return PydanticTool(
+                _tool,
+                takes_ctx=True,
+                requires_approval=registered_tool.requires_approval,
+            )
+
+        built_tools.append(_build_wrapped_tool(tool))
+
+    return built_tools
 
 
 class PydanticAIToolPipelineSession(AgentSessionProtocol):

@@ -17,6 +17,9 @@ from copilot.types import (
     PreToolUseHookOutput,
     SessionConfig as CopilotSessionConfig,
     SessionHooks,
+    Tool as CopilotTool,
+    ToolInvocation,
+    ToolResult as CopilotToolResult,
 )
 from tool_pipeline_common import (
     AgentChunk,
@@ -25,6 +28,7 @@ from tool_pipeline_common import (
     AgentSessionProtocol,
     SessionConfig,
     SessionFactoryProtocol,
+    ToolRegistry,
     ToolCallInfo,
     ToolCallResultInfo,
     ToolPipeline,
@@ -41,6 +45,40 @@ def _to_mapping(value: Any) -> Mapping[str, Any]:
     if isinstance(value, Mapping):
         return value
     return {}
+
+
+def build_copilot_tools(
+    registry: ToolRegistry,
+    deps: Any,
+) -> list[CopilotTool]:
+    built_tools: list[CopilotTool] = []
+
+    for tool in registry.tools:
+
+        def _build_handler(registered_tool):
+            def _handler(invocation: ToolInvocation) -> CopilotToolResult:
+                arguments = _to_mapping(invocation.get("arguments"))
+                result = registered_tool.handler(arguments, deps)
+                payload: CopilotToolResult = {
+                    "resultType": "success" if result.success else "failure",
+                    "textResultForLlm": result.content,
+                }
+                if result.error:
+                    payload["error"] = result.error
+                return payload
+
+            return _handler
+
+        built_tools.append(
+            CopilotTool(
+                name=tool.name,
+                description=tool.description,
+                handler=_build_handler(tool),
+                parameters=dict(tool.parameters),
+            )
+        )
+
+    return built_tools
 
 
 class HookInteractionBroker:
