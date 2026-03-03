@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from collections.abc import Callable, Mapping
-from typing import Any
+from dataclasses import dataclass
+from typing import TypeVar
 from urllib.error import URLError
 from urllib.parse import urlsplit
 from urllib.request import urlopen
@@ -48,17 +48,26 @@ from tool_pipeline_common import (
 )
 from pydantic_ai.tools import RunContext
 
+DepsT = TypeVar("DepsT")
 
-PydanticAgentBuilder = Callable[[SessionConfig], Agent[Any, str | DeferredToolRequests]]
+
+PydanticAgentBuilder = Callable[[SessionConfig], Agent[DepsT, str | DeferredToolRequests]]
 
 
-def build_pydantic_tools(registry: ToolRegistry) -> list[PydanticTool[Any]]:
-    built_tools: list[PydanticTool[Any]] = []
+@dataclass(slots=True)
+class PydanticBackendConfig:
+    model_name: str
+    ollama_base_url: str
+    system_prompt: str
+    ensure_ollama_available: bool = True
+
+def build_pydantic_tools(registry: ToolRegistry[DepsT]) -> list[PydanticTool[DepsT]]:
+    built_tools: list[PydanticTool[DepsT]] = []
 
     for tool in registry.tools:
 
         def _build_wrapped_tool(registered_tool):
-            def _tool(ctx: RunContext[Any]) -> ToolResult:
+            def _tool(ctx: RunContext[DepsT]) -> ToolResult:
                 return registered_tool.handler({}, ctx.deps)
 
             _tool.__name__ = registered_tool.name
@@ -74,13 +83,12 @@ def build_pydantic_tools(registry: ToolRegistry) -> list[PydanticTool[Any]]:
 
 
 def build_pydantic_agent(
-    model_name: str,
-    ollama_base_url: str,
-    registry: ToolRegistry,
-) -> Agent[Any, str | DeferredToolRequests]:
+    backend_config: PydanticBackendConfig,
+    registry: ToolRegistry[DepsT],
+) -> Agent[DepsT, str | DeferredToolRequests]:
     model = OpenAIChatModel(
-        provider=OllamaProvider(base_url=ollama_base_url),
-        model_name=model_name,
+        provider=OllamaProvider(base_url=backend_config.ollama_base_url),
+        model_name=backend_config.model_name,
     )
 
     tools = build_pydantic_tools(registry)
@@ -90,10 +98,7 @@ def build_pydantic_agent(
         deps_type=object,
         output_type=str | DeferredToolRequests,
         tools=tools,
-        system_prompt=(
-            "You are a spike backend with a backend-agnostic tool pipeline. "
-            "Use project_name_tool to answer project-name questions."
-        ),
+        system_prompt=backend_config.system_prompt,
     )
 
 
@@ -118,17 +123,22 @@ def ensure_ollama_is_running(ollama_base_url: str) -> None:
 
 async def create_pydantic_factory(
     pipeline: ToolPipeline,
-    deps: Any,
-    registry: ToolRegistry,
-    model_name: str | None,
+    deps: DepsT,
+    registry: ToolRegistry[DepsT],
+    backend_config: PydanticBackendConfig,
 ) -> SessionFactoryProtocol:
-    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-    ensure_ollama_is_running(ollama_base_url)
+    if backend_config.ensure_ollama_available:
+        ensure_ollama_is_running(backend_config.ollama_base_url)
 
-    def build_agent(session_config: SessionConfig) -> Agent[Any, str | DeferredToolRequests]:
+    def build_agent(session_config: SessionConfig) -> Agent[DepsT, str | DeferredToolRequests]:
+        effective_model_name = session_config.model_name or backend_config.model_name
         return build_pydantic_agent(
-            model_name=model_name or session_config.model_name or "gpt-oss:20b",
-            ollama_base_url=ollama_base_url,
+            backend_config=PydanticBackendConfig(
+                model_name=effective_model_name,
+                ollama_base_url=backend_config.ollama_base_url,
+                system_prompt=backend_config.system_prompt,
+                ensure_ollama_available=backend_config.ensure_ollama_available,
+            ),
             registry=registry,
         )
 
@@ -142,10 +152,10 @@ async def create_pydantic_factory(
 class PydanticAIToolPipelineSession(AgentSessionProtocol):
     def __init__(
         self,
-        agent: Agent[Any, str | DeferredToolRequests],
-        deps: Any,
+        agent: Agent[DepsT, str | DeferredToolRequests],
+        deps: DepsT,
         pipeline: ToolPipeline,
-        history: list[Any] | None = None,
+        history: list[object] | None = None,
     ) -> None:
         self._agent = agent
         self._deps = deps
@@ -155,10 +165,10 @@ class PydanticAIToolPipelineSession(AgentSessionProtocol):
         self._tool_calls_by_id: dict[str, ToolCallInfo] = {}
 
     @property
-    def history(self) -> tuple[Any, ...]:
+    def history(self) -> tuple[object, ...]:
         return tuple(self._history)
 
-    def _map_chunk(self, event: Any) -> AgentChunk | None:
+    def _map_chunk(self, event: object) -> AgentChunk | None:
         match event:
             case PartStartEvent(part=TextPart(content=text)) if text:
                 return AgentChunk(content=text, is_thought=False)
@@ -172,7 +182,7 @@ class PydanticAIToolPipelineSession(AgentSessionProtocol):
                 return AgentChunk(content=thought, is_thought=True)
         return None
 
-    def _map_tool_call(self, event: Any) -> ToolCallInfo | None:
+    def _map_tool_call(self, event: object) -> ToolCallInfo | None:
         match event:
             case PartStartEvent(
                 part=ToolCallPart(tool_name=name, args=args, tool_call_id=call_id)
@@ -187,7 +197,7 @@ class PydanticAIToolPipelineSession(AgentSessionProtocol):
                 return info
         return None
 
-    async def _map_tool_result(self, event: Any) -> ToolCallResultInfo | None:
+    async def _map_tool_result(self, event: object) -> ToolCallResultInfo | None:
         if not isinstance(event, FunctionToolResultEvent):
             return None
         if not isinstance(event.result, ToolReturnPart):
@@ -357,7 +367,7 @@ class PydanticAIToolPipelineSession(AgentSessionProtocol):
 class PydanticAIToolPipelineFactory(SessionFactoryProtocol):
     def __init__(
         self,
-        deps: Any,
+        deps: DepsT,
         pipeline: ToolPipeline,
         agent_builder: PydanticAgentBuilder,
     ) -> None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, Protocol, TypeAlias
+from typing import Callable, Literal, Protocol, TypeAlias, TypeVar
 from uuid import uuid4
 
 
@@ -16,7 +16,7 @@ class AgentChunk:
 @dataclass(slots=True)
 class ToolCallInfo:
     tool_name: str
-    args: Mapping[str, Any]
+    args: Mapping[str, object]
     tool_call_id: str
 
 
@@ -51,6 +51,9 @@ class InteractionResponse:
 ToolDecisionKind: TypeAlias = Literal["allow", "ask", "deny"]
 
 
+DepsT = TypeVar("DepsT")
+
+
 @dataclass(slots=True)
 class ToolDecision:
     kind: ToolDecisionKind
@@ -61,7 +64,7 @@ class ToolDecision:
 class ToolPipelineInteractionRequest(InteractionRequest):
     stage: str = "approval"
     tool_calls: list[ToolCallInfo] = field(default_factory=list)
-    context: Mapping[str, Any] = field(default_factory=dict)
+    context: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -167,7 +170,7 @@ class ToolPipeline:
     def build_interaction_request(
         self,
         tool_call: ToolCallInfo,
-        context: Mapping[str, Any] | None = None,
+        context: Mapping[str, object] | None = None,
     ) -> ToolPipelineInteractionRequest:
         request_context = context or {}
         for stage in self._stages:
@@ -243,7 +246,7 @@ class InteractiveApprovalStage:
     def build_interaction_request(
         self,
         tool_call: ToolCallInfo,
-        context: Mapping[str, Any],
+        context: Mapping[str, object],
     ) -> ToolPipelineInteractionRequest:
         return ToolPipelineInteractionRequest(
             stage="approval",
@@ -294,33 +297,33 @@ class ResultPrefixStage:
         )
 
 
-ToolHandler: TypeAlias = Callable[[Mapping[str, Any], Any], ToolResult]
+ToolHandler: TypeAlias = Callable[[Mapping[str, object], DepsT], ToolResult]
 
 
 @dataclass(slots=True)
-class RegisteredTool:
+class RegisteredTool[DepsT]:
     name: str
     description: str
     handler: ToolHandler
-    parameters: Mapping[str, Any] = field(default_factory=dict)
+    parameters: Mapping[str, object] = field(default_factory=dict)
     requires_approval: bool = True
 
 
-class ToolRegistry:
+class ToolRegistry[DepsT]:
     def __init__(self) -> None:
-        self._tools: dict[str, RegisteredTool] = {}
+        self._tools: dict[str, RegisteredTool[DepsT]] = {}
 
-    def register(self, tool: RegisteredTool) -> None:
+    def register(self, tool: RegisteredTool[DepsT]) -> None:
         self._tools[tool.name] = tool
 
     def disable(self, tool_name: str) -> None:
         self._tools.pop(tool_name, None)
 
-    def resolve(self, tool_name: str) -> RegisteredTool | None:
+    def resolve(self, tool_name: str) -> RegisteredTool[DepsT] | None:
         return self._tools.get(tool_name)
 
     @property
-    def tools(self) -> tuple[RegisteredTool, ...]:
+    def tools(self) -> tuple[RegisteredTool[DepsT], ...]:
         return tuple(self._tools.values())
 
 
@@ -331,7 +334,7 @@ class SessionConfig:
 
 class AgentSessionProtocol(Protocol):
     @property
-    def history(self) -> Sequence[Any]:
+    def history(self) -> Sequence[object]:
         ...
 
     def run(

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
 from collections.abc import Callable, Mapping
-from pathlib import Path
-from typing import Any, cast
+from dataclasses import dataclass
+from typing import TypeVar, cast
 from uuid import uuid4
 
 from copilot import CopilotClient, CopilotSession
@@ -42,18 +41,30 @@ from tool_pipeline_common import (
 )
 
 
+DepsT = TypeVar("DepsT")
+
+
 DiagnosticLogger = Callable[[str], None]
 
 
-def _to_mapping(value: Any) -> Mapping[str, Any]:
+@dataclass(slots=True)
+class CopilotBackendConfig:
+    cli_path: str
+    model_name: str
+    system_message: str
+    skill_directories: tuple[str, ...]
+    enable_post_hook_mutation: bool = False
+
+
+def _to_mapping(value: object) -> Mapping[str, object]:
     if isinstance(value, Mapping):
-        return value
+        return cast(Mapping[str, object], value)
     return {}
 
 
 def build_copilot_tools(
-    registry: ToolRegistry,
-    deps: Any,
+    registry: ToolRegistry[DepsT],
+    deps: DepsT,
 ) -> list[CopilotTool]:
     built_tools: list[CopilotTool] = []
 
@@ -214,7 +225,7 @@ class GhToolPipelineSession(AgentSessionProtocol):
         self._pipeline = pipeline
         self._diagnostic_logger = diagnostic_logger
         self._event_queue: asyncio.Queue[SessionEvent] = asyncio.Queue()
-        self._history: list[Any] = []
+        self._history: list[object] = []
         self._run_active = False
         self._tool_calls_by_id: dict[str, ToolCallInfo] = {}
 
@@ -224,7 +235,7 @@ class GhToolPipelineSession(AgentSessionProtocol):
         self._session.on(_on_event)
 
     @property
-    def history(self) -> tuple[Any, ...]:
+    def history(self) -> tuple[object, ...]:
         return tuple(self._history)
 
     def run(
@@ -433,18 +444,12 @@ async def _always_approve_permission_request(
 
 async def create_copilot_factory(
     pipeline: ToolPipeline,
-    deps: Any,
-    registry: ToolRegistry,
-    model_name: str | None,
-    root_dir: Path,
-    enable_post_hook_mutation: bool,
+    deps: DepsT,
+    registry: ToolRegistry[DepsT],
+    backend_config: CopilotBackendConfig,
     diagnostic_logger: DiagnosticLogger | None = None,
 ) -> tuple[SessionFactoryProtocol, CopilotClient]:
-    cli_path = shutil.which("copilot")
-    if not cli_path:
-        raise RuntimeError("GitHub Copilot CLI was not found in PATH. Install it and sign in first.")
-
-    client = CopilotClient({"cli_path": cli_path})
+    client = CopilotClient({"cli_path": backend_config.cli_path})
     await client.start()
 
     def build_session_config(
@@ -452,18 +457,15 @@ async def create_copilot_factory(
         hooks: SessionHooks,
     ) -> CopilotSessionConfig:
         return CopilotSessionConfig(
-            model=model_name or session_config.model_name or "gpt-5 mini",
+            model=session_config.model_name or backend_config.model_name,
             streaming=True,
             on_permission_request=_always_approve_permission_request,
             hooks=hooks,
             tools=build_copilot_tools(registry, deps),
-            skill_directories=[str(root_dir / ".github" / "skills")],
+            skill_directories=list(backend_config.skill_directories),
             system_message=SystemMessageReplaceConfig(
                 mode="replace",
-                content=(
-                    "You are a coding spike agent with a backend-agnostic tool pipeline. "
-                    "To answer project name questions, call `project_name_tool` and report the result."
-                ),
+                content=backend_config.system_message,
             ),
         )
 
@@ -471,7 +473,7 @@ async def create_copilot_factory(
         client=client,
         pipeline=pipeline,
         session_config_builder=build_session_config,
-        enable_post_hook_mutation=enable_post_hook_mutation,
+        enable_post_hook_mutation=backend_config.enable_post_hook_mutation,
         diagnostic_logger=diagnostic_logger,
     )
     return factory, client

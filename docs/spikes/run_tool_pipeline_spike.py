@@ -5,14 +5,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Mapping
-from typing import Any
+from typing import Protocol
 
-from tool_pipeline_backend_copilot import create_copilot_factory
-from tool_pipeline_backend_pydantic import create_pydantic_factory
+from tool_pipeline_backend_copilot import CopilotBackendConfig, create_copilot_factory
+from tool_pipeline_backend_pydantic import PydanticBackendConfig, create_pydantic_factory
 from tool_pipeline_common import (
     AutoAllowAndRememberInteractionResponder,
     BlockedToolStage,
@@ -32,6 +33,11 @@ class SpikeDeps:
     project_name: str = "agent-c"
 
 
+class AsyncStoppable(Protocol):
+    async def stop(self) -> None:
+        ...
+
+
 def project_name_tool(args: Mapping[str, object], deps: SpikeDeps) -> ToolResult:
     override_name = args.get("project_name")
     if isinstance(override_name, str) and override_name.strip():
@@ -47,10 +53,10 @@ def report_intent_tool(args: Mapping[str, object], deps: SpikeDeps) -> ToolResul
     return ToolResult(success=True, content="Intent acknowledged.")
 
 
-def build_tool_registry() -> ToolRegistry:
-    registry = ToolRegistry()
+def build_tool_registry() -> ToolRegistry[SpikeDeps]:
+    registry = ToolRegistry[SpikeDeps]()
     registry.register(
-        RegisteredTool(
+        RegisteredTool[SpikeDeps](
             name="report_intent",
             description="Report your current intent before taking tool actions.",
             handler=report_intent_tool,
@@ -68,7 +74,7 @@ def build_tool_registry() -> ToolRegistry:
         )
     )
     registry.register(
-        RegisteredTool(
+        RegisteredTool[SpikeDeps](
             name="project_name_tool",
             description="Return the current project name.",
             handler=project_name_tool,
@@ -97,6 +103,40 @@ def build_pipeline() -> ToolPipeline:
     )
 
 
+def ensure_copilot_cli_available() -> str:
+    cli_path = shutil.which("copilot")
+    if not cli_path:
+        raise RuntimeError(
+            "GitHub Copilot CLI was not found in PATH. Install it and sign in first."
+        )
+    return cli_path
+
+
+def build_copilot_backend_config(enable_post_hook_mutation: bool) -> CopilotBackendConfig:
+    return CopilotBackendConfig(
+        cli_path=ensure_copilot_cli_available(),
+        model_name="gpt-5 mini",
+        system_message=(
+            "You are a coding spike agent with a backend-agnostic tool pipeline. "
+            "To answer project name questions, call `project_name_tool` and report the result."
+        ),
+        skill_directories=(str(Path.cwd() / ".github" / "skills"),),
+        enable_post_hook_mutation=enable_post_hook_mutation,
+    )
+
+
+def build_pydantic_backend_config() -> PydanticBackendConfig:
+    return PydanticBackendConfig(
+        model_name="gpt-oss:20b",
+        ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+        system_prompt=(
+            "You are a spike backend with a backend-agnostic tool pipeline. "
+            "Use project_name_tool to answer project-name questions."
+        ),
+        ensure_ollama_available=True,
+    )
+
+
 async def run_spike(backend: str, prompt: str, model_name: str | None) -> None:
     pipeline = build_pipeline()
     deps = SpikeDeps(project_name="agent-c")
@@ -109,7 +149,7 @@ async def run_spike(backend: str, prompt: str, model_name: str | None) -> None:
         "yes",
         "on",
     }
-    cleanup_client: Any | None = None
+    cleanup_client: AsyncStoppable | None = None
 
     try:
         if backend == "copilot":
@@ -123,6 +163,9 @@ async def run_spike(backend: str, prompt: str, model_name: str | None) -> None:
                 "SPIKE_ENABLE_COPILOT_POST_HOOK_MUTATION",
                 "",
             ).strip().lower() in {"1", "true", "yes", "on"}
+            copilot_backend_config = build_copilot_backend_config(
+                enable_post_hook_mutation=enable_post_hook_mutation,
+            )
 
             diagnostic_logger = None
             if debug_copilot:
@@ -136,17 +179,16 @@ async def run_spike(backend: str, prompt: str, model_name: str | None) -> None:
                 pipeline,
                 deps,
                 registry,
-                model_name,
-                root_dir=Path.cwd(),
-                enable_post_hook_mutation=enable_post_hook_mutation,
+                backend_config=copilot_backend_config,
                 diagnostic_logger=diagnostic_logger,
             )
         elif backend == "pydantic":
+            pydantic_backend_config = build_pydantic_backend_config()
             factory = await create_pydantic_factory(
                 pipeline,
                 deps,
                 registry,
-                model_name,
+                backend_config=pydantic_backend_config,
             )
         else:
             raise ValueError(f"Unknown backend: {backend}")
