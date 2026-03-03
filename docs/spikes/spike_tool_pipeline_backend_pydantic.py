@@ -31,7 +31,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.ollama import OllamaProvider
-from tool_pipeline_common import (
+from spike_tool_pipeline_core import (
     AgentChunk,
     AgentDone,
     AgentEventStream,

@@ -24,7 +24,7 @@ from copilot.types import (
     ToolInvocation,
     ToolResult as CopilotToolResult,
 )
-from tool_pipeline_common import (
+from spike_tool_pipeline_core import (
     AgentChunk,
     AgentDone,
     AgentEventStream,

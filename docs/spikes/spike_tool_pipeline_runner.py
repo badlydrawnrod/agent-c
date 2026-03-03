@@ -12,9 +12,15 @@ from pathlib import Path
 from collections.abc import Mapping
 from typing import Protocol
 
-from tool_pipeline_backend_copilot import CopilotBackendConfig, create_copilot_factory
-from tool_pipeline_backend_pydantic import PydanticBackendConfig, create_pydantic_factory
-from tool_pipeline_common import (
+from spike_tool_pipeline_backend_copilot import (
+    CopilotBackendConfig,
+    create_copilot_factory,
+)
+from spike_tool_pipeline_backend_pydantic import (
+    PydanticBackendConfig,
+    create_pydantic_factory,
+)
+from spike_tool_pipeline_core import (
     AutoAllowAndRememberInteractionResponder,
     BlockedToolStage,
     InteractiveApprovalStage,
