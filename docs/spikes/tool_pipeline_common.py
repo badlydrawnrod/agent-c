@@ -79,18 +79,6 @@ class InteractionResponder(Protocol):
         ...
 
 
-class AutoAllowInteractionResponder:
-    async def decide(
-        self,
-        request: ToolPipelineInteractionRequest,
-    ) -> ToolPipelineInteractionResponse:
-        return ToolPipelineInteractionResponse(
-            request_id=request.request_id,
-            decision="allow",
-            reason=None,
-        )
-
-
 class AutoAllowAndRememberInteractionResponder:
     async def decide(
         self,

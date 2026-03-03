@@ -3,40 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import os
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
 from typing import Any
-from urllib.error import URLError
-from urllib.parse import urlsplit
-from urllib.request import urlopen
 
-from minimal_tool_pipeline_common_no_approval_request import (
-    AgentChunk,
-    AgentDone,
-    AgentEventStream,
-    AgentSessionProtocol,
-    AutoAllowAndRememberInteractionResponder,
-    BlockedToolStage,
-    InteractiveApprovalStage,
-    ResultPrefixStage,
-    SessionConfig,
-    SessionFactoryProtocol,
-    ToolCallInfo,
-    ToolCallResultInfo,
-    ToolPipeline,
-    ToolPipelineInteractionRequest,
-    ToolPipelineInteractionResponse,
-    ToolResult,
-    iter_events_with_interaction_responder,
-)
 from pydantic_ai import (
     Agent,
     AgentRunResultEvent,
     DeferredToolRequests,
     DeferredToolResults,
     FunctionToolResultEvent,
-    Tool,
     ToolDenied,
 )
 from pydantic_ai.messages import (
@@ -49,50 +24,30 @@ from pydantic_ai.messages import (
     ToolCallPart,
     ToolReturnPart,
 )
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.ollama import OllamaProvider
-from pydantic_ai.tools import RunContext
+from tool_pipeline_common import (
+    AgentChunk,
+    AgentDone,
+    AgentEventStream,
+    AgentSessionProtocol,
+    SessionConfig,
+    SessionFactoryProtocol,
+    ToolCallInfo,
+    ToolCallResultInfo,
+    ToolPipeline,
+    ToolPipelineInteractionRequest,
+    ToolPipelineInteractionResponse,
+    ToolResult,
+)
 
 
-@dataclass(slots=True)
-class SpikeDeps:
-    project_name: str = "agent-c"
-
-
-def project_name_tool(ctx: RunContext[SpikeDeps]) -> ToolResult:
-    return ToolResult(success=True, content=ctx.deps.project_name)
-
-
-def build_pydantic_agent(
-    model_name: str,
-    ollama_base_url: str,
-) -> Agent[SpikeDeps, str | DeferredToolRequests]:
-    model = OpenAIChatModel(
-        provider=OllamaProvider(base_url=ollama_base_url),
-        model_name=model_name,
-    )
-
-    tools: list[Tool[SpikeDeps]] = [
-        Tool(project_name_tool, takes_ctx=True, requires_approval=True)
-    ]
-
-    return Agent(
-        model=model,
-        deps_type=SpikeDeps,
-        output_type=str | DeferredToolRequests,
-        tools=tools,
-        system_prompt=(
-            "You are a spike backend with a backend-agnostic tool pipeline. "
-            "Use project_name_tool to answer project-name questions."
-        ),
-    )
+PydanticAgentBuilder = Callable[[SessionConfig], Agent[Any, str | DeferredToolRequests]]
 
 
 class PydanticAIToolPipelineSession(AgentSessionProtocol):
     def __init__(
         self,
-        agent: Agent[SpikeDeps, str | DeferredToolRequests],
-        deps: SpikeDeps,
+        agent: Agent[Any, str | DeferredToolRequests],
+        deps: Any,
         pipeline: ToolPipeline,
         history: list[Any] | None = None,
     ) -> None:
@@ -304,70 +259,20 @@ class PydanticAIToolPipelineSession(AgentSessionProtocol):
 
 
 class PydanticAIToolPipelineFactory(SessionFactoryProtocol):
-    def __init__(self, deps: SpikeDeps, pipeline: ToolPipeline) -> None:
+    def __init__(
+        self,
+        deps: Any,
+        pipeline: ToolPipeline,
+        agent_builder: PydanticAgentBuilder,
+    ) -> None:
         self._deps = deps
         self._pipeline = pipeline
+        self._agent_builder = agent_builder
 
     async def create_session(self, config: SessionConfig) -> AgentSessionProtocol:
-        model_name = config.model_name or "gpt-oss:20b"
-        ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-        agent = build_pydantic_agent(model_name, ollama_base_url)
+        agent = self._agent_builder(config)
         return PydanticAIToolPipelineSession(
             agent=agent,
             deps=self._deps,
             pipeline=self._pipeline,
         )
-
-
-def _ollama_health_url(ollama_base_url: str) -> str:
-    split = urlsplit(ollama_base_url)
-    return f"{split.scheme}://{split.netloc}/api/tags"
-
-
-def ensure_ollama_is_running(ollama_base_url: str) -> None:
-    health_url = _ollama_health_url(ollama_base_url)
-    try:
-        with urlopen(health_url, timeout=2.0) as response:
-            if response.status >= 400:
-                raise URLError(f"HTTP {response.status}")
-    except Exception as exc:
-        raise RuntimeError(
-            "Could not reach Ollama. Please start Ollama first (for example: `ollama serve`) "
-            f"and ensure model `gpt-oss:20b` is available (`ollama pull gpt-oss:20b`). "
-            f"Tried endpoint: {health_url}"
-        ) from exc
-
-
-async def demo_auto_allow() -> None:
-    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-    ensure_ollama_is_running(ollama_base_url)
-
-    pipeline = ToolPipeline(
-        stages=[
-            BlockedToolStage(blocked_tools={"dangerous_tool"}),
-            InteractiveApprovalStage(),
-            ResultPrefixStage(),
-        ]
-    )
-
-    factory = PydanticAIToolPipelineFactory(
-        deps=SpikeDeps(project_name="agent-c"),
-        pipeline=pipeline,
-    )
-    session = await factory.create_session(SessionConfig())
-    stream = session.run("What is the project name?")
-
-    async for event in iter_events_with_interaction_responder(
-        stream,
-        AutoAllowAndRememberInteractionResponder(),
-    ):
-        print(event)
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(demo_auto_allow())
-    except RuntimeError as exc:
-        print(f"ERROR: {exc}")
-    except StopAsyncIteration:
-        pass

@@ -3,34 +3,25 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
-from collections.abc import Mapping
-from pathlib import Path
+from collections.abc import Callable, Mapping
 from typing import Any, cast
 from uuid import uuid4
 
 from copilot import CopilotClient, CopilotSession
 from copilot.generated.session_events import SessionEvent, SessionEventType
 from copilot.types import (
-    PermissionRequest,
-    PermissionRequestResult,
     PostToolUseHookInput,
     PostToolUseHookOutput,
     PreToolUseHookInput,
     PreToolUseHookOutput,
     SessionConfig as CopilotSessionConfig,
     SessionHooks,
-    SystemMessageReplaceConfig,
 )
-from minimal_tool_pipeline_common_no_approval_request import (
+from tool_pipeline_common import (
     AgentChunk,
     AgentDone,
     AgentEventStream,
     AgentSessionProtocol,
-    AutoAllowAndRememberInteractionResponder,
-    BlockedToolStage,
-    InteractiveApprovalStage,
-    ResultPrefixStage,
     SessionConfig,
     SessionFactoryProtocol,
     ToolCallInfo,
@@ -39,7 +30,6 @@ from minimal_tool_pipeline_common_no_approval_request import (
     ToolPipelineInteractionRequest,
     ToolPipelineInteractionResponse,
     ToolResult,
-    iter_events_with_interaction_responder,
 )
 
 
@@ -73,8 +63,6 @@ class HookInteractionBroker:
 
 
 class CopilotToolHooks:
-    """Adapter that maps Copilot pre/post hooks into a generic ToolPipeline."""
-
     def __init__(self, pipeline: ToolPipeline, interaction_broker: HookInteractionBroker) -> None:
         self._pipeline = pipeline
         self._interaction_broker = interaction_broker
@@ -84,6 +72,7 @@ class CopilotToolHooks:
         hook_input: PreToolUseHookInput,
         args: dict[str, str],
     ) -> PreToolUseHookOutput | None:
+        del args
         tool_name = hook_input.get("toolName") or "unknown"
         tool_args = hook_input.get("toolArgs")
         mapped_args = tool_args if isinstance(tool_args, Mapping) else {}
@@ -115,6 +104,7 @@ class CopilotToolHooks:
         hook_input: PostToolUseHookInput,
         args: dict[str, str],
     ) -> PostToolUseHookOutput | None:
+        del args
         tool_name = hook_input.get("toolName") or "unknown"
         tool_args = hook_input.get("toolArgs")
         mapped_args = tool_args if isinstance(tool_args, Mapping) else {}
@@ -288,18 +278,22 @@ class GhToolPipelineSession(AgentSessionProtocol):
                 interaction_task.cancel()
 
 
-async def _always_approve_permission_request(
-    permission_request: PermissionRequest,
-    args: dict[str, str],
-) -> PermissionRequestResult:
-    return PermissionRequestResult(kind="approved")
+CopilotSessionConfigBuilder = Callable[
+    [SessionConfig, SessionHooks],
+    CopilotSessionConfig,
+]
 
 
 class CopilotToolPipelineFactory(SessionFactoryProtocol):
-    def __init__(self, client: CopilotClient, root_dir: Path, pipeline: ToolPipeline) -> None:
+    def __init__(
+        self,
+        client: CopilotClient,
+        pipeline: ToolPipeline,
+        session_config_builder: CopilotSessionConfigBuilder,
+    ) -> None:
         self._client = client
-        self._root_dir = root_dir
         self._pipeline = pipeline
+        self._session_config_builder = session_config_builder
 
     async def create_session(self, config: SessionConfig) -> AgentSessionProtocol:
         interaction_broker = HookInteractionBroker(self._pipeline)
@@ -308,76 +302,10 @@ class CopilotToolPipelineFactory(SessionFactoryProtocol):
             "on_pre_tool_use": hooks_adapter.on_pre_tool_use,
             "on_post_tool_use": hooks_adapter.on_post_tool_use,
         }
-
-        session_config = CopilotSessionConfig(
-            model=config.model_name or "gpt-5 mini",
-            streaming=True,
-            on_permission_request=_always_approve_permission_request,
-            hooks=hooks,
-            skill_directories=[str(self._root_dir / ".github" / "skills")],
-            system_message=SystemMessageReplaceConfig(
-                mode="replace",
-                content=(
-                    "You are a coding spike agent with a backend-agnostic tool pipeline. "
-                    "To answer project name questions, run a shell command like "
-                    "`echo agent-c` and report the result."
-                ),
-            ),
-        )
+        session_config = self._session_config_builder(config, hooks)
         sdk_session = await self._client.create_session(session_config)
         return GhToolPipelineSession(
             sdk_session,
             interaction_broker=interaction_broker,
             pipeline=self._pipeline,
         )
-
-
-def ensure_copilot_cli_available() -> str:
-    cli_path = shutil.which("copilot")
-    if not cli_path:
-        raise RuntimeError(
-            "GitHub Copilot CLI was not found in PATH. Install it and sign in first."
-        )
-    return cli_path
-
-
-async def demo_auto_allow() -> None:
-    cli_path = ensure_copilot_cli_available()
-    client = CopilotClient({"cli_path": cli_path})
-    await client.start()
-
-    pipeline = ToolPipeline(
-        stages=[
-            BlockedToolStage(blocked_tools={"dangerous_tool"}),
-            InteractiveApprovalStage(),
-            ResultPrefixStage(),
-        ]
-    )
-
-    try:
-        factory = CopilotToolPipelineFactory(
-            client=client,
-            root_dir=Path.cwd(),
-            pipeline=pipeline,
-        )
-        session = await factory.create_session(SessionConfig())
-        stream = session.run(
-            "What is the project name? Use a tool if needed and then answer."
-        )
-
-        async for event in iter_events_with_interaction_responder(
-            stream,
-            AutoAllowAndRememberInteractionResponder(),
-        ):
-            print(event)
-    finally:
-        await client.stop()
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(demo_auto_allow())
-    except RuntimeError as exc:
-        print(f"ERROR: {exc}")
-    except StopAsyncIteration:
-        pass
