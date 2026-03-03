@@ -3,20 +3,24 @@
 from __future__ import annotations
 
 import asyncio
-import os
+import shutil
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
 from copilot import CopilotClient, CopilotSession
 from copilot.generated.session_events import SessionEvent, SessionEventType
 from copilot.types import (
+    PermissionRequest,
+    PermissionRequestResult,
     PostToolUseHookInput,
     PostToolUseHookOutput,
     PreToolUseHookInput,
     PreToolUseHookOutput,
     SessionConfig as CopilotSessionConfig,
     SessionHooks,
+    SystemMessageReplaceConfig,
     Tool as CopilotTool,
     ToolInvocation,
     ToolResult as CopilotToolResult,
@@ -118,15 +122,13 @@ class CopilotToolHooks:
         self,
         pipeline: ToolPipeline,
         interaction_broker: HookInteractionBroker,
+        enable_post_hook_mutation: bool,
         diagnostic_logger: DiagnosticLogger | None = None,
     ) -> None:
         self._pipeline = pipeline
         self._interaction_broker = interaction_broker
         self._diagnostic_logger = diagnostic_logger
-        self._enable_post_hook_mutation = os.getenv(
-            "SPIKE_ENABLE_COPILOT_POST_HOOK_MUTATION",
-            "",
-        ).strip().lower() in {"1", "true", "yes", "on"}
+        self._enable_post_hook_mutation = enable_post_hook_mutation
 
     async def on_pre_tool_use(
         self,
@@ -318,17 +320,16 @@ class GhToolPipelineSession(AgentSessionProtocol):
                             self._diagnostic_logger(
                                 f"event.tool_start tool={tool_name} tool_call_id={getattr(event.data, 'tool_call_id', None)} args={getattr(event.data, 'arguments', None)!r}"
                             )
-                        if tool_name != "report_intent":
-                            tool_call = ToolCallInfo(
-                                tool_name=tool_name,
-                                args=_to_mapping(getattr(event.data, "arguments", {})),
-                                tool_call_id=(
-                                    getattr(event.data, "tool_call_id", None)
-                                    or str(uuid4())
-                                ),
-                            )
-                            self._tool_calls_by_id[tool_call.tool_call_id] = tool_call
-                            yield tool_call
+                        tool_call = ToolCallInfo(
+                            tool_name=tool_name,
+                            args=_to_mapping(getattr(event.data, "arguments", {})),
+                            tool_call_id=(
+                                getattr(event.data, "tool_call_id", None)
+                                or str(uuid4())
+                            ),
+                        )
+                        self._tool_calls_by_id[tool_call.tool_call_id] = tool_call
+                        yield tool_call
                         continue
 
                     if event.type == SessionEventType.TOOL_EXECUTION_COMPLETE:
@@ -387,11 +388,13 @@ class CopilotToolPipelineFactory(SessionFactoryProtocol):
         client: CopilotClient,
         pipeline: ToolPipeline,
         session_config_builder: CopilotSessionConfigBuilder,
+        enable_post_hook_mutation: bool,
         diagnostic_logger: DiagnosticLogger | None = None,
     ) -> None:
         self._client = client
         self._pipeline = pipeline
         self._session_config_builder = session_config_builder
+        self._enable_post_hook_mutation = enable_post_hook_mutation
         self._diagnostic_logger = diagnostic_logger
 
     async def create_session(self, config: SessionConfig) -> AgentSessionProtocol:
@@ -402,6 +405,7 @@ class CopilotToolPipelineFactory(SessionFactoryProtocol):
         hooks_adapter = CopilotToolHooks(
             self._pipeline,
             interaction_broker,
+            enable_post_hook_mutation=self._enable_post_hook_mutation,
             diagnostic_logger=self._diagnostic_logger,
         )
         hooks: SessionHooks = {
@@ -416,3 +420,58 @@ class CopilotToolPipelineFactory(SessionFactoryProtocol):
             pipeline=self._pipeline,
             diagnostic_logger=self._diagnostic_logger,
         )
+
+
+async def _always_approve_permission_request(
+    permission_request: PermissionRequest,
+    args: dict[str, str],
+) -> PermissionRequestResult:
+    del permission_request
+    del args
+    return PermissionRequestResult(kind="approved")
+
+
+async def create_copilot_factory(
+    pipeline: ToolPipeline,
+    deps: Any,
+    registry: ToolRegistry,
+    model_name: str | None,
+    root_dir: Path,
+    enable_post_hook_mutation: bool,
+    diagnostic_logger: DiagnosticLogger | None = None,
+) -> tuple[SessionFactoryProtocol, CopilotClient]:
+    cli_path = shutil.which("copilot")
+    if not cli_path:
+        raise RuntimeError("GitHub Copilot CLI was not found in PATH. Install it and sign in first.")
+
+    client = CopilotClient({"cli_path": cli_path})
+    await client.start()
+
+    def build_session_config(
+        session_config: SessionConfig,
+        hooks: SessionHooks,
+    ) -> CopilotSessionConfig:
+        return CopilotSessionConfig(
+            model=model_name or session_config.model_name or "gpt-5 mini",
+            streaming=True,
+            on_permission_request=_always_approve_permission_request,
+            hooks=hooks,
+            tools=build_copilot_tools(registry, deps),
+            skill_directories=[str(root_dir / ".github" / "skills")],
+            system_message=SystemMessageReplaceConfig(
+                mode="replace",
+                content=(
+                    "You are a coding spike agent with a backend-agnostic tool pipeline. "
+                    "To answer project name questions, call `project_name_tool` and report the result."
+                ),
+            ),
+        )
+
+    factory = CopilotToolPipelineFactory(
+        client=client,
+        pipeline=pipeline,
+        session_config_builder=build_session_config,
+        enable_post_hook_mutation=enable_post_hook_mutation,
+        diagnostic_logger=diagnostic_logger,
+    )
+    return factory, client

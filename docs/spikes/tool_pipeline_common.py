@@ -218,12 +218,14 @@ class InteractiveApprovalStage:
         self,
         grant_store: SessionGrantStore | None = None,
         grant_key_builder: Callable[[ToolCallInfo], str] = default_grant_key_builder,
+        auto_allow_tools: set[str] | None = None,
     ) -> None:
         self._grant_store = grant_store or SessionGrantStore()
         self._grant_key_builder = grant_key_builder
+        self._auto_allow_tools = auto_allow_tools or set()
 
     async def before_tool_use(self, tool_call: ToolCallInfo) -> ToolDecision | None:
-        if tool_call.tool_name == "report_intent":
+        if tool_call.tool_name in self._auto_allow_tools:
             return ToolDecision(kind="allow")
 
         grant_key = self._grant_key_builder(tool_call)

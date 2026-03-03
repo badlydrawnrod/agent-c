@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Callable, Mapping
 from typing import Any
+from urllib.error import URLError
+from urllib.parse import urlsplit
+from urllib.request import urlopen
 
 from pydantic_ai import (
     Agent,
@@ -25,6 +29,8 @@ from pydantic_ai.messages import (
     ToolCallPart,
     ToolReturnPart,
 )
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.ollama import OllamaProvider
 from tool_pipeline_common import (
     AgentChunk,
     AgentDone,
@@ -65,6 +71,72 @@ def build_pydantic_tools(registry: ToolRegistry) -> list[PydanticTool[Any]]:
         built_tools.append(_build_wrapped_tool(tool))
 
     return built_tools
+
+
+def build_pydantic_agent(
+    model_name: str,
+    ollama_base_url: str,
+    registry: ToolRegistry,
+) -> Agent[Any, str | DeferredToolRequests]:
+    model = OpenAIChatModel(
+        provider=OllamaProvider(base_url=ollama_base_url),
+        model_name=model_name,
+    )
+
+    tools = build_pydantic_tools(registry)
+
+    return Agent(
+        model=model,
+        deps_type=object,
+        output_type=str | DeferredToolRequests,
+        tools=tools,
+        system_prompt=(
+            "You are a spike backend with a backend-agnostic tool pipeline. "
+            "Use project_name_tool to answer project-name questions."
+        ),
+    )
+
+
+def _ollama_health_url(ollama_base_url: str) -> str:
+    split = urlsplit(ollama_base_url)
+    return f"{split.scheme}://{split.netloc}/api/tags"
+
+
+def ensure_ollama_is_running(ollama_base_url: str) -> None:
+    health_url = _ollama_health_url(ollama_base_url)
+    try:
+        with urlopen(health_url, timeout=2.0) as response:
+            if response.status >= 400:
+                raise URLError(f"HTTP {response.status}")
+    except Exception as exc:
+        raise RuntimeError(
+            "Could not reach Ollama. Please start Ollama first (for example: `ollama serve`) "
+            f"and ensure model `gpt-oss:20b` is available (`ollama pull gpt-oss:20b`). "
+            f"Tried endpoint: {health_url}"
+        ) from exc
+
+
+async def create_pydantic_factory(
+    pipeline: ToolPipeline,
+    deps: Any,
+    registry: ToolRegistry,
+    model_name: str | None,
+) -> SessionFactoryProtocol:
+    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    ensure_ollama_is_running(ollama_base_url)
+
+    def build_agent(session_config: SessionConfig) -> Agent[Any, str | DeferredToolRequests]:
+        return build_pydantic_agent(
+            model_name=model_name or session_config.model_name or "gpt-oss:20b",
+            ollama_base_url=ollama_base_url,
+            registry=registry,
+        )
+
+    return PydanticAIToolPipelineFactory(
+        deps=deps,
+        pipeline=pipeline,
+        agent_builder=build_agent,
+    )
 
 
 class PydanticAIToolPipelineSession(AgentSessionProtocol):

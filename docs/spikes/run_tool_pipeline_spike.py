@@ -5,35 +5,20 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
-import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.error import URLError
-from urllib.parse import urlsplit
-from urllib.request import urlopen
 from collections.abc import Mapping
+from typing import Any
 
-from copilot import CopilotClient
-from copilot.types import (
-    PermissionRequest,
-    PermissionRequestResult,
-    SessionConfig as CopilotSessionConfig,
-    SessionHooks,
-    SystemMessageReplaceConfig,
-)
-from pydantic_ai import Agent, DeferredToolRequests
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.ollama import OllamaProvider
-from tool_pipeline_backend_copilot import CopilotToolPipelineFactory, build_copilot_tools
-from tool_pipeline_backend_pydantic import PydanticAIToolPipelineFactory, build_pydantic_tools
+from tool_pipeline_backend_copilot import create_copilot_factory
+from tool_pipeline_backend_pydantic import create_pydantic_factory
 from tool_pipeline_common import (
     AutoAllowAndRememberInteractionResponder,
     BlockedToolStage,
     InteractiveApprovalStage,
     RegisteredTool,
     SessionConfig,
-    SessionFactoryProtocol,
     ToolCallResultInfo,
     ToolRegistry,
     ToolPipeline,
@@ -103,143 +88,12 @@ def build_tool_registry() -> ToolRegistry:
     return registry
 
 
-def build_pydantic_agent(
-    model_name: str,
-    ollama_base_url: str,
-    registry: ToolRegistry,
-) -> Agent[SpikeDeps, str | DeferredToolRequests]:
-    model = OpenAIChatModel(
-        provider=OllamaProvider(base_url=ollama_base_url),
-        model_name=model_name,
-    )
-
-    tools = build_pydantic_tools(registry)
-
-    return Agent(
-        model=model,
-        deps_type=SpikeDeps,
-        output_type=str | DeferredToolRequests,
-        tools=tools,
-        system_prompt=(
-            "You are a spike backend with a backend-agnostic tool pipeline. "
-            "Use project_name_tool to answer project-name questions."
-        ),
-    )
-
-
-def _ollama_health_url(ollama_base_url: str) -> str:
-    split = urlsplit(ollama_base_url)
-    return f"{split.scheme}://{split.netloc}/api/tags"
-
-
-def ensure_ollama_is_running(ollama_base_url: str) -> None:
-    health_url = _ollama_health_url(ollama_base_url)
-    try:
-        with urlopen(health_url, timeout=2.0) as response:
-            if response.status >= 400:
-                raise URLError(f"HTTP {response.status}")
-    except Exception as exc:
-        raise RuntimeError(
-            "Could not reach Ollama. Please start Ollama first (for example: `ollama serve`) "
-            f"and ensure model `gpt-oss:20b` is available (`ollama pull gpt-oss:20b`). "
-            f"Tried endpoint: {health_url}"
-        ) from exc
-
-
-def ensure_copilot_cli_available() -> str:
-    cli_path = shutil.which("copilot")
-    if not cli_path:
-        raise RuntimeError(
-            "GitHub Copilot CLI was not found in PATH. Install it and sign in first."
-        )
-    return cli_path
-
-
-async def _always_approve_permission_request(
-    permission_request: PermissionRequest,
-    args: dict[str, str],
-) -> PermissionRequestResult:
-    del permission_request
-    del args
-    return PermissionRequestResult(kind="approved")
-
-
 def build_pipeline() -> ToolPipeline:
     return ToolPipeline(
         stages=[
             BlockedToolStage(blocked_tools={"dangerous_tool"}),
-            InteractiveApprovalStage(),
+            InteractiveApprovalStage(auto_allow_tools={"report_intent"}),
         ]
-    )
-
-
-async def create_copilot_factory(
-    pipeline: ToolPipeline,
-    deps: SpikeDeps,
-    registry: ToolRegistry,
-    model_name: str | None,
-    debug_copilot: bool = False,
-) -> tuple[SessionFactoryProtocol, CopilotClient]:
-    cli_path = ensure_copilot_cli_available()
-    client = CopilotClient({"cli_path": cli_path})
-    await client.start()
-
-    def build_session_config(
-        session_config: SessionConfig,
-        hooks: SessionHooks,
-    ) -> CopilotSessionConfig:
-        return CopilotSessionConfig(
-            model=model_name or session_config.model_name or "gpt-5 mini",
-            streaming=True,
-            on_permission_request=_always_approve_permission_request,
-            hooks=hooks,
-            tools=build_copilot_tools(registry, deps),
-            skill_directories=[str(Path.cwd() / ".github" / "skills")],
-            system_message=SystemMessageReplaceConfig(
-                mode="replace",
-                content=(
-                    "You are a coding spike agent with a backend-agnostic tool pipeline. "
-                    "To answer project name questions, call `project_name_tool` and report the result."
-                ),
-            ),
-        )
-
-    diagnostic_logger = None
-    if debug_copilot:
-        def _logger(message: str) -> None:
-            print(f"[copilot-debug] {message}", file=sys.stderr)
-
-        diagnostic_logger = _logger
-
-    factory = CopilotToolPipelineFactory(
-        client=client,
-        pipeline=pipeline,
-        session_config_builder=build_session_config,
-        diagnostic_logger=diagnostic_logger,
-    )
-    return factory, client
-
-
-async def create_pydantic_factory(
-    pipeline: ToolPipeline,
-    deps: SpikeDeps,
-    registry: ToolRegistry,
-    model_name: str | None,
-) -> SessionFactoryProtocol:
-    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-    ensure_ollama_is_running(ollama_base_url)
-
-    def build_agent(session_config: SessionConfig) -> Agent[SpikeDeps, str | DeferredToolRequests]:
-        return build_pydantic_agent(
-            model_name=model_name or session_config.model_name or "gpt-oss:20b",
-            ollama_base_url=ollama_base_url,
-            registry=registry,
-        )
-
-    return PydanticAIToolPipelineFactory(
-        deps=deps,
-        pipeline=pipeline,
-        agent_builder=build_agent,
     )
 
 
@@ -255,7 +109,7 @@ async def run_spike(backend: str, prompt: str, model_name: str | None) -> None:
         "yes",
         "on",
     }
-    cleanup_client: CopilotClient | None = None
+    cleanup_client: Any | None = None
 
     try:
         if backend == "copilot":
@@ -265,12 +119,27 @@ async def run_spike(backend: str, prompt: str, model_name: str | None) -> None:
                 "yes",
                 "on",
             }
+            enable_post_hook_mutation = os.getenv(
+                "SPIKE_ENABLE_COPILOT_POST_HOOK_MUTATION",
+                "",
+            ).strip().lower() in {"1", "true", "yes", "on"}
+
+            diagnostic_logger = None
+            if debug_copilot:
+
+                def _logger(message: str) -> None:
+                    print(f"[copilot-debug] {message}", file=sys.stderr)
+
+                diagnostic_logger = _logger
+
             factory, cleanup_client = await create_copilot_factory(
                 pipeline,
                 deps,
                 registry,
                 model_name,
-                debug_copilot=debug_copilot,
+                root_dir=Path.cwd(),
+                enable_post_hook_mutation=enable_post_hook_mutation,
+                diagnostic_logger=diagnostic_logger,
             )
         elif backend == "pydantic":
             factory = await create_pydantic_factory(
